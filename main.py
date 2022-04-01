@@ -28,6 +28,7 @@ class Browser:
         #driver.maximize_window()
         #タイムアウト設定
         driver.set_page_load_timeout(120)
+        driver.implicitly_wait(30) #要素が見つかるまで待つ時間
         self.driver = driver
 class Zaimu_Kaikei(Browser):
     def __init__(self, driver_path):
@@ -38,6 +39,24 @@ class Zaimu_Kaikei(Browser):
         self.driver.find_element_by_id("doLogin").click()
     def input_order(self):
         self.driver.get('https://zaimu-kaikei.kosen-k.go.jp/llas5/view/financialAccounting/supply/purchaseRequestDetailsEntry.html')
+        self.driver.find_element_by_id('select2-skkuSskYsn-1-container').click()
+        self.driver.find_element_by_class_name('select2-search__field').send_keys('前田')
+        self.driver.find_element_by_xpath('//li[contains(@title,"前田")]' ).click()
+        self.driver.find_element_by_id('cHnName').send_keys('testitem')
+        self.driver.find_element_by_id('cSu').send_keys('2')
+        self.driver.find_element_by_id('cTnk').send_keys('1100')
+        self.driver.find_element_by_class_name('select2-search__field').send_keys('共同研究ｽﾍﾟｰｽ（１）')
+        self.driver.find_element_by_xpath('//li[contains(@title,"共同研究ｽﾍﾟｰｽ（１）")]' ).click()
+    def input_order_test(self):
+        self.driver.get('https://zaimu-kaikei.kosen-k.go.jp/llas5/view/financialAccounting/supply/purchaseRequestDetailsEntry.html')
+        self.driver.find_element_by_id('select2-skkuSskYsn-1-container').click()
+        self.driver.find_element_by_class_name('select2-search__field').send_keys('前田')
+        self.driver.find_element_by_xpath('//li[contains(@title,"前田")]' ).click()
+        self.driver.find_element_by_id('cHnName').send_keys('testitem')
+        self.driver.find_element_by_id('cSu').send_keys('2')
+        self.driver.find_element_by_id('cTnk').send_keys('1100')
+        self.driver.find_element_by_class_name('select2-search__field').send_keys('共同研究ｽﾍﾟｰｽ（１）')
+        self.driver.find_element_by_xpath('//li[contains(@title,"共同研究ｽﾍﾟｰｽ（１）")]' ).click()
 path_change()
 import os
 driver_path = os.getcwd() + '/msedgedriver.exe'
