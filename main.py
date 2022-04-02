@@ -115,9 +115,31 @@ class Order:
 path_change()
 import os
 driver_path = os.getcwd() + '/msedgedriver.exe'
+
+#会計システムにログイン
+browser = Zaimu_Kaikei(driver_path)
+
+import pandas as pd
+df = pd.read_csv('ItemList20220401.csv', header=0, encoding = 'shift_jis')
+for index, row in df.iterrows():
+    item        = f'{row["品名"]}_{row["型番"]}({row["色・サイズ等"]})'
+    quantity    = row["数量"]
+    unit_price  = row["単価（税込）"]
+    place       = row["納入場所"]
+    organization= row["執行組織"]
+    budget      = row["予算"]
+    #購入依頼データを作成
+    order = Order(item, quantity, unit_price, place, organization, budget)
+    #購入依頼を入力
+    browser.input_order(order)
+    
+
+
+'''
 browser = Zaimu_Kaikei(driver_path)
 order = Order(item = 'Qrio Card 2枚 Q-CD1', quantity = '5', unit_price = 2200, place = '共同研究ｽﾍﾟｰｽ（１）', organization = '機械共通経費', budget = '(教育研究)研究実施経費')
 browser.input_order(order)
 print('作業完了')
 import time
 time.sleep(60)
+'''
