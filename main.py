@@ -37,6 +37,33 @@ class Zaimu_Kaikei(Browser):
         from selenium.webdriver.support.select import Select
         Select(self.driver.find_element_by_id('cCdSb')).select_by_visible_text('39/39_香川高等専門学校')
         self.driver.find_element_by_id("doLogin").click()
+    def input_order(self, order):
+        self.driver.get('https://zaimu-kaikei.kosen-k.go.jp/llas5/view/financialAccounting/supply/purchaseRequestDetailsEntry.html')
+        #配分中以外も表示
+        self.driver.find_element_by_id('hibnCheckYsn-1').click()
+        #執行組織の変更
+        self.driver.find_element_by_id('select2-skkuSskYsn-1-container').click()
+        self.driver.find_element_by_class_name('select2-search__field').send_keys(order.organization)
+        self.driver.find_element_by_xpath(f'//li[contains(@title,"{order.organization}")]').click()
+        #予算の選択
+        self.driver.find_element_by_xpath(f'//span[contains(text(),"{order.budget}")]').click()
+        #各項目の入力
+        self.driver.find_element_by_id('select2-cCdNuhnPlc-container').click()
+        self.driver.find_element_by_class_name('select2-search__field').send_keys(order.place)
+        self.driver.find_element_by_xpath(f'//li[contains(@title,"{order.place}")]' ).click()
+        self.driver.find_element_by_id('cHnName').send_keys(order.item)
+        self.driver.find_element_by_id('cSu').send_keys(order.quantity)
+        self.driver.find_element_by_id('cTnk').send_keys(order.unit_price)
+        #新規作成
+        self.driver.find_element_by_id('select2-skkuSskYsn-1-container').click()
+        self.driver.find_element_by_id('S_CreateNew').click()
+        while not "登録しました" in self.driver.page_source:
+            import time
+            time.sleep(1)
+            try:
+                self.driver.switch_to_alert().accept()
+            except:
+                print('登録待機中…')
     def input_orders(self):
         self.driver.get('https://zaimu-kaikei.kosen-k.go.jp/llas5/view/financialAccounting/supply/purchaseRequestDetailsEntry.html')
         #配分中以外も表示
@@ -64,7 +91,7 @@ class Zaimu_Kaikei(Browser):
                 self.driver.switch_to_alert().accept()
             except:
                 print('登録待機中…')
-        #ここから２件目
+        #ここから２件目(新規作成ページへ移動すればこの処理は不要)
         self.driver.find_element_by_id('systemMessage').click()
         self.driver.find_element_by_id('S_CreateNew').click()
 
@@ -75,12 +102,22 @@ class Zaimu_Kaikei(Browser):
                 self.driver.switch_to_alert().accept()
             except:
                 print('登録待機中…')
+        self.driver.get('https://zaimu-kaikei.kosen-k.go.jp/llas5/view/financialAccounting/supply/purchaseRequestDetailsEntry.html')
+class Order:
+    def __init__(self, item, quantity, unit_price, place, organization, budget):
+        self.item           = item
+        self.quantity       = quantity
+        self.unit_price     = unit_price
+        self.place          = place
+        self.organization   = organization
+        self.budget         = budget
 
 path_change()
 import os
 driver_path = os.getcwd() + '/msedgedriver.exe'
 browser = Zaimu_Kaikei(driver_path)
-browser.input_orders()
+order = Order(item = 'Qrio Card 2枚 Q-CD1', quantity = '5', unit_price = 2200, place = '共同研究ｽﾍﾟｰｽ（１）', organization = '機械共通経費', budget = '(教育研究)研究実施経費')
+browser.input_order(order)
 print('作業完了')
 import time
 time.sleep(60)
