@@ -5,9 +5,9 @@ class Browser:
         from msedge.selenium_tools import Edge, EdgeOptions
         options = EdgeOptions()
         options.use_chromium = True
-        #options.add_argument('--headless')  #非表示で起動
+        #options.add_argument('--headless')  #非表示で起動（するとパスワード自動入力が使用できない。）
         options.add_argument(f'--user-data-dir={userdata_path}')
-        options.add_argument('--profile-directory=Default')#ユーザーとして起動
+        options.add_argument('--profile-directory=Default')#ユーザーとして起動（パスワード自動入力のため）
         options.add_argument("--remote-debugging-port=9222") 
         options.add_argument('--lang=en')
         #ダウンロード先を変更
@@ -26,7 +26,7 @@ class Zaimu_Kaikei(Browser):
         self.driver.get('https://zaimu-kaikei.kosen-k.go.jp/llas5/view/login.html')
         from selenium.webdriver.support.select import Select
         Select(self.driver.find_element_by_id('cCdSb')).select_by_visible_text('39/39_香川高等専門学校')
-        self.driver.find_element_by_id("doLogin").click()
+        self.driver.find_element_by_id('doLogin').click()
     def input_order(self, order):
         self.driver.get('https://zaimu-kaikei.kosen-k.go.jp/llas5/view/financialAccounting/supply/purchaseRequestDetailsEntry.html')
         #配分中以外も表示
@@ -88,3 +88,7 @@ for index, row in df.iterrows():
     #購入依頼を入力
     browser.input_order(order)
 
+'''
+入力項目ごとにクラスを作成し，inputメソッドをそれぞれオーバーライド
+入力項目一覧をリストとしてfor文に渡すと，入力部分をfor文でinput回すだけで書ける。
+'''
