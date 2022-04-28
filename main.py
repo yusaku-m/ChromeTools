@@ -65,17 +65,17 @@ class Order:
 
 #作業ディレクトリを指定
 import os
-os.chdir('C:\Users\Yusaku\独立行政法人 国立高等専門学校機構\前田研究室 - General\研究室資料\物品購入')
+os.chdir('C:/Users/Yusaku/独立行政法人 国立高等専門学校機構/前田研究室 - General/研究室資料/物品購入')
 #edgeドライバのパスを指定(使用バージョンに合わせたものをダウンロードhttps://developer.microsoft.com/ja-jp/microsoft-edge/tools/webdriver/)
 driver_path = 'C:/Users/Yusaku/Documents/GitHub/msedgedriver.exe'
-#一時データの保存先を指定（どこでもいい）
-userdata_path = 'C:/Users/Yusaku/.edgebuf'
+#edge一時データの保存先を指定（プロファイルがある場所でないと動かなくなった）
+userdata_path = 'C:/Users/Yusaku/AppData/Local/Microsoft/Edge/User Data'
 
 #会計システムにログイン（ユーザー名，パスワードはedgeに保存しておけば自動入力される）
 browser = Zaimu_Kaikei(driver_path, userdata_path)
 
 import pandas as pd
-df = pd.read_csv('ItemList20220401.csv', header=0, encoding = 'shift_jis')
+df = pd.read_csv('ItemList20220428.csv', header=0, encoding = 'shift_jis')
 for index, row in df.iterrows():
     item        = f'{row["品名"]}_{row["型番"]}({row["色・サイズ等"]})'
     quantity    = row["数量"]
