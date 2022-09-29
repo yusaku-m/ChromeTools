@@ -51,7 +51,7 @@ class Browser:
             return
         else:
             #更新
-            print(f'Your edge is updeted. Driver update is needed to version {data}.')
+            print(f'Start updating of Edge driver to version {data}.')
             self.update_driver(data)
 
     def update_driver(self, terget_version):
@@ -94,11 +94,11 @@ class Browser:
             with open(f'./Edge/status.binaryfile','wb') as f:
                 pickle.dump(self.status, f) 
 
-    def set_status(self, index, value):
-        if index in self.status.index:
-            self.status.at[index, 'value'] = value
+    def set_status(self, index_name, value):
+        if index_name in self.status.index:
+            self.status.at[index_name, 'value'] = value
         else:
-            df = pd.DataFrame(value, index = index, columns=['value'])
+            df = pd.DataFrame(value, index = [index_name], columns=['value'])
             self.status = pd.concat([self.status, df])
             self.save_status()
 

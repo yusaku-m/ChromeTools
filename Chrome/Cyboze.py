@@ -1,29 +1,32 @@
-from Edge import Browser
+from Chrome.Browser import Browser
+from selenium.webdriver.common.by import By
 
 class Cyboze(Browser):
     def login(self):
-        self.driver.get('https://cybozu.da.kagawa-nct.ac.jp/cgi-bin/cbag/ag.cgi?page=AGIndex')
+        self.driver.get('https://cybozu.da.kagawa-nct.ac.jp/scripts/cbag/ag.exe?')
+
         import os
         import pandas as pd
-        id = pd.read_csv(os.getcwd() + "/id.csv", sep=",", header = None, index_col = 0)
-        #print(id)
-        
-        name = id.at['氏名', 1]
-        dep =  id.at['学科', 1]
-        self.driver.find_element_by_link_text("切り替える").click()
+
+        self.open_status()
+        name = self.status.at['氏名', 'value']
+        dep =  self.status.at['学科', 'value']
+        self.driver.find_element(By.LINK_TEXT, "切り替える").click()
         from selenium.webdriver.support.select import Select
-        Select(self.driver.find_element_by_name('Group')).select_by_visible_text(dep)
-        self.driver.find_element_by_name("Submit").click()
-        Select(self.driver.find_element_by_name('_ID')).select_by_visible_text(name)
-        self.driver.find_element_by_name("Submit").click()
+        Select(self.driver.find_element(By.NAME, 'Group')).select_by_visible_text(dep)
+        self.driver.find_element(By.NAME, "Submit").click()
+        Select(self.driver.find_element(By.NAME, '_ID')).select_by_visible_text(name)
+        self.driver.find_element(By.NAME, "Submit").click()
+
     def set_id(self, name , department):
         self.open_status()
         self.set_status('氏名', name)
         self.set_status('学科', department)
-
+        self.save_status()
 
     def begin_work(self):
-        self.driver.get('https://cybozu.da.kagawa-nct.ac.jp/cgi-bin/cbag/ag.cgi?page=AGIndex')
+        self.driver.get('https://cybozu.da.kagawa-nct.ac.jp/scripts/cbag/ag.exe?page=AGIndex')
+
         try:
             self.driver.find_element_by_name("PIn").click()
         except:
@@ -37,7 +40,7 @@ class Cyboze(Browser):
 
     def finish_work(self):
         driver = self.driver
-        driver.get('https://cybozu.da.kagawa-nct.ac.jp/cgi-bin/cbag/ag.cgi?page=AGIndex')
+        driver.get('https://cybozu.da.kagawa-nct.ac.jp/scripts/cbag/ag.exe?page=AGIndex')
         try:
             driver.find_element_by_name("POut").click()
         except:
@@ -52,7 +55,7 @@ class Cyboze(Browser):
 
     def get_calender(self):
         driver = self.driver
-        driver.get('https://cybozu.da.kagawa-nct.ac.jp/cgi-bin/cbag/ag.cgi?page=PersonalScheduleExport')
+        driver.get('https://cybozu.da.kagawa-nct.ac.jp/scripts/cbag/ag.exe?page=PersonalScheduleExport')
         #現在の西暦を取得
         import datetime
         ThisYear = datetime.date.today().year
@@ -63,11 +66,12 @@ class Cyboze(Browser):
         #Select(driver.find_element_by_name('SetDate.Year')).select_by_visible_text('1997年')
         #Select(driver.find_element_by_name('SetDate.Month')).select_by_visible_text('1月')
         #10年後までを選択
-        Select(driver.find_element_by_name('EndDate.Year')).select_by_visible_text(str(ThisYear + 10) + '年')
-        Select(driver.find_element_by_name('EndDate.Month')).select_by_visible_text(str(ThisMonth + 1) + '月')
+        Select(driver.find_element(By.NAME, 'EndDate.Year')).select_by_visible_text(str(ThisYear + 7) + '年')
+        Select(driver.find_element(By.NAME, 'EndDate.Month')).select_by_visible_text(str(ThisMonth + 1) + '月')
         #ダウンロード
-        driver.find_element_by_name("Export").click()
-        self.browser.wait_download()
+        driver.find_element(By.NAME, "Export").click()
+        self.wait_download()
+
         #ファイルの削除
         import shutil
         import os
