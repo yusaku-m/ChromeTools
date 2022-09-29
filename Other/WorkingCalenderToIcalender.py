@@ -1,11 +1,3 @@
-'''
-勤務時間把握用
-calender.csvに変形労働カレンダーを値として貼り付け，
-インポートするカレンダーをGoogleカレンダー内で作成
-作成したカレンダーへインポート
-'''
-
-
 def path_change():
     import os
     print(os.getcwd())
@@ -53,7 +45,6 @@ def get_working_calender():
                 else:
                     working_times = np.vstack((working_times, [year, act_month, act_day, working_time])) 
     return working_times
-
 def workcalender_to_ical(working_times):
     f = open('Office_Hour.ics', 'w', encoding='utf-8')
     #ヘッダーの書き込み
