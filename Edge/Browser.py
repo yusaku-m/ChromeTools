@@ -7,7 +7,8 @@ class Browser:
         """userdata_pathはedge://version/の「Profile path」を使用すると保存しているパスワードが有効に"""
         #初期設定
         self.driver_path = "./Edge/msedgedriver.exe"
-        from msedge.selenium_tools import Edge, EdgeOptions
+        self.status = []
+        from msedge.selenium_tools import Edge, EdgeOptions # pip install msedge-selenium-tools
 
         #バージョンの確認,Edgeが更新されていればドライバを更新
         self.check_driver_version()
@@ -40,11 +41,11 @@ class Browser:
 
         #現状ステータスの読み込み
         import pandas as pd
-        status = self.open_status()
+        self.open_status()
         print('Check Edge version...')
 
         #ドライババージョンと比較
-        if 'Edge_Version' in status.index and data == status.at['Edge_Version', 'value']:
+        if 'Edge_Version' in self.status.index and data == self.status.at['Edge_Version', 'value']:
             #更新不要
             print(f'Your edge is latest verion ({data}).')
             return
@@ -80,31 +81,31 @@ class Browser:
 
         #更新バージョンをステータスに反映
         import pandas as pd
-        status = self.open_status()
-        
-        if 'Edge_Version' in status.index:
-            status.at['Edge_Version', 'value'] = terget_version
-        else:
-            df = pd.DataFrame(terget_version, index = ['Edge_Version'], columns=['value'])
-            status = pd.concat([status, df])
-            self.save_status(status)
+        self.open_status()
+        self.set_status('Edge_Version', terget_version)
              
     def open_status(self):
         #現状ステータスの読み込み
         if os.path.isfile('./Edge/status.binaryfile') == True:
             with open(f'./Edge/status.binaryfile','rb') as f:
-                status = pickle.load(f)
+                self.status = pickle.load(f)
         else:
-            cols = ['value']
-            status = pd.DataFrame(index=[], columns=cols)
+            self.status = pd.DataFrame(index=[], columns=['value'])
             with open(f'./Edge/status.binaryfile','wb') as f:
-                pickle.dump(status, f) 
-        return status
+                pickle.dump(self.status, f) 
 
-    def save_status(self, status):
+    def set_status(self, index, value):
+        if index in self.status.index:
+            self.status.at[index, 'value'] = value
+        else:
+            df = pd.DataFrame(value, index = index, columns=['value'])
+            self.status = pd.concat([self.status, df])
+            self.save_status()
+
+    def save_status(self):
         import pickle
         with open(f'./Edge/status.binaryfile','wb') as f:
-            pickle.dump(status, f) 
+            pickle.dump(self.status, f) 
 
     def close(self):
         self.driver.quit()
