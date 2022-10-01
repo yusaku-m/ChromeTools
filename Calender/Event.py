@@ -21,11 +21,16 @@ class Event():
         else:
             return False
 
-    def input_cyboze(self, driver):
+    def input_cyboze(self, browser):
         """サイボウズへの入力"""
+        driver = browser.driver
+        status = browser.status
+        uid = status.at['CybozeUID', 'value']
+        gid = status.at['CybozeGID', 'value']
+
         date = f'{self.start_time.year}.{self.start_time.month}.{self.start_time.day}'
         
-        driver.get('https://cybozu.da.kagawa-nct.ac.jp/scripts/cbag/ag.exe?page=ScheduleEntry&UID=5791&GID=2100&Date=da.' + date + '&cp=sg')
+        driver.get(f'https://cybozu.da.kagawa-nct.ac.jp/scripts/cbag/ag.exe?page=ScheduleEntry&UID={uid}&GID={gid}&Date=da.{date}&cp=sg')
 
         Select(driver.find_element(By.NAME, 'SetTime.Hour')).select_by_visible_text(str(self.start_time.hour) + '時')
         Select(driver.find_element(By.NAME, 'SetTime.Minute')).select_by_visible_text(str(self.start_time.minute).zfill(2) + '分')
@@ -34,22 +39,39 @@ class Event():
         driver.find_element(By.NAME, 'Detail').send_keys(self.title)#予定名
         driver.find_element(By.NAME, 'Memo').send_keys(self.id)#uid含む全情報
         driver.find_element(By.NAME, "Entry").click()
+        import time
+        time.sleep(2)
 
-    def delete_cyboze(self, driver):
+    def delete_cyboze(self, browser):
         """サイボウズの予定削除"""
         #現在の西暦を取得
+        driver = browser.driver
+        status = browser.status
+        uid = status.at['CybozeUID', 'value']
+        gid = status.at['CybozeGID', 'value']
+
         from datetime import datetime
         date = f'{datetime.now().year}.{datetime.now().month}.{datetime.now().day}'
-        driver.get("https://cybozu.da.kagawa-nct.ac.jp/scripts/cbag/ag.exe?page=ScheduleSimpleSearch&CP=sg&uid=5791&gid=2100&date=da." + date + "&Text=" + self.id)
+        driver.get(f"https://cybozu.da.kagawa-nct.ac.jp/scripts/cbag/ag.exe?page=ScheduleSearch&CP=sg&uid={uid}&gid={gid}&date=da.{date}&Text=")
+        driver.find_element(By.XPATH, "//input[@type='text'][@class=''][@name='Text']").send_keys(self.id)
+        select = Select(driver.find_element(By.NAME, "ED.Year"))
+        select.select_by_index(len(select.options)-1)
+        driver.find_element(By.NAME, "Submit").click()
+        #削除
         driver.find_element(By.LINK_TEXT, self.title).click()
         driver.find_element(By.LINK_TEXT, '削除する').click()
         driver.find_element(By.NAME, "Yes").click()
 
 class AllDay(Event):
     """終日予定"""
-    def input_cyboze(self, driver):
+    def input_cyboze(self, browser):
+        driver = browser.driver
+        status = browser.status
+        uid = status.at['CybozeUID', 'value']
+        gid = status.at['CybozeGID', 'value']
+
         date = f'{self.start_time.year}.{self.start_time.month}.{self.start_time.day}'
-        driver.get('https://cybozu.da.kagawa-nct.ac.jp/scripts/cbag/ag.exe?page=ScheduleEntry&UID=5791&GID=2100&Date=da.' + date + '&cp=sg')
+        driver.get(f'https://cybozu.da.kagawa-nct.ac.jp/scripts/cbag/ag.exe?page=ScheduleEntry&UID={uid}&GID={gid}&Date=da.' + date + '&cp=sg')
         driver.find_element(By.NAME, 'Detail').send_keys(self.title)#予定名
         driver.find_element(By.NAME, 'Memo').send_keys(self.id)#uid含む全情報
         driver.find_element(By.NAME, "Entry").click()

@@ -18,10 +18,12 @@ class Cyboze(Browser):
         Select(self.driver.find_element(By.NAME, '_ID')).select_by_visible_text(name)
         self.driver.find_element(By.NAME, "Submit").click()
 
-    def set_id(self, name , department):
+    def set_id(self, name, uid, department, gid):
         self.open_status()
         self.set_status('氏名', name)
         self.set_status('学科', department)
+        self.set_status('CybozeUID', uid)
+        self.set_status('CybozeGID', gid)
         self.save_status()
 
     def begin_work(self):
@@ -66,7 +68,9 @@ class Cyboze(Browser):
         #Select(driver.find_element_by_name('SetDate.Year')).select_by_visible_text('1997年')
         #Select(driver.find_element_by_name('SetDate.Month')).select_by_visible_text('1月')
         #10年後までを選択
-        Select(driver.find_element(By.NAME, 'EndDate.Year')).select_by_visible_text(str(ThisYear + 7) + '年')
+        select = Select(driver.find_element(By.NAME, 'EndDate.Year'))
+        selectLen = len(select.options)
+        select.select_by_index(selectLen-1)
         Select(driver.find_element(By.NAME, 'EndDate.Month')).select_by_visible_text(str(ThisMonth + 1) + '月')
         #ダウンロード
         driver.find_element(By.NAME, "Export").click()
@@ -81,9 +85,9 @@ class Cyboze(Browser):
     def input_schedule(self, calender):
         from tqdm import tqdm
         for event in tqdm(calender.events, desc='予定入力中'):
-            event.input_cyboze(self.driver)
+            event.input_cyboze(self)
 
     def delete_schedule(self, calender):
         from tqdm import tqdm
         for event in tqdm(calender.events, desc='予定削除中'):
-            event.delete_cyboze(self.driver)
+            event.delete_cyboze(self)
