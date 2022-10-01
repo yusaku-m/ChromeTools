@@ -3,11 +3,13 @@ import pandas as pd
 import pickle
 
 class Browser:
+    """ブラウザ操作クラス"""
     def __init__(self, userdata_path):
         """userdata_pathはChrome://version/の「Profile path」を使用すると保存しているパスワードが有効に"""
         #初期設定
         self.driver_path = "./Chrome/Chromedriver.exe"
-        self.status = []
+        self.open_status()
+        
         from selenium import webdriver
         from selenium.webdriver.chrome.options import Options
         from webdriver_manager.chrome import ChromeDriverManager
@@ -30,9 +32,10 @@ class Browser:
         driver.set_page_load_timeout(120)
         driver.implicitly_wait(10) #要素が見つかるまで待つ時間
         self.driver = driver
+        
 
     def open_status(self):
-        #現状ステータスの読み込み
+        """現状ステータスの読み込み"""
         if os.path.isfile('./Chrome/status.binaryfile') == True:
             with open(f'./Chrome/status.binaryfile','rb') as f:
                 self.status = pickle.load(f)
@@ -53,7 +56,11 @@ class Browser:
         import pickle
         with open(f'./Chrome/status.binaryfile','wb') as f:
             pickle.dump(self.status, f) 
-            
+
+    def set_id(self):
+        """各サイトのidをセット"""
+        pass            
+
     def wait_download(self):
         import glob
         n = 1
