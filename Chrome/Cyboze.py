@@ -75,15 +75,15 @@ class Cyboze(Browser):
         #ファイルの削除
         import shutil
         import os
-        self.calenderpath = os.getcwd() + '/CybozeSchedule.csv'
-        shutil.move('schedule.csv', self.calenderpath)   
+        self.calenderpath = os.getcwd() + './data/CybozeSchedule.csv'
+        shutil.move('./data/schedule.csv', self.calenderpath)   
 
     def input_schedule(self, calender):
         from tqdm import tqdm
         for event in tqdm(calender.events, desc='予定入力中'):
-            event.input_cyboze(self.browser)
+            event.input_cyboze(self.driver)
 
     def delete_schedule(self, calender):
         from tqdm import tqdm
         for event in tqdm(calender.events, desc='予定削除中'):
-            event.delete_cyboze(self.browser)
+            event.delete_cyboze(self.driver)

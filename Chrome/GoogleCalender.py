@@ -5,12 +5,12 @@ class GoogleCalender(Browser):
     def get_calender(self):
         self.driver.get('https://calendar.google.com/calendar/u/0/exporticalzip') 
         self.wait_download()
-        self.calenderpass = './data/gcal'
+        self.calenderpass = './data/GoogleCalender'
         id = self.status.at['googleID', 'value']
         import shutil
-        shutil.unpack_archive(f"{id}@gmail.com.ical.zip", self.calenderpass)
+        shutil.unpack_archive(f"./data/{id}@gmail.com.ical.zip", self.calenderpass)
         import os
-        os.remove(id + '@gmail.com.ical.zip')
+        os.remove(f"./data/{id}@gmail.com.ical.zip")
     
     def set_id(self, id):
         self.open_status()

@@ -9,7 +9,7 @@ class Browser:
         #初期設定
         self.driver_path = "./Chrome/Chromedriver.exe"
         self.open_status()
-        
+
         from selenium import webdriver
         from selenium.webdriver.chrome.options import Options
         from webdriver_manager.chrome import ChromeDriverManager
@@ -23,7 +23,7 @@ class Browser:
         options.add_argument("--remote-debugging-port=9222") 
 
         #ダウンロード先を変更
-        options.add_experimental_option('prefs', {'download.default_directory': os.getcwd()})
+        options.add_experimental_option('prefs', {'download.default_directory': f"{os.getcwd()}\\data"})
         options.add_experimental_option('excludeSwitches', ['enable-logging']) #エラー非表示
         #ドライバの読み込み
         driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
