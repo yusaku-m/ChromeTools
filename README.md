@@ -1,24 +1,24 @@
 # ChromeTools
 ブラウザ関連諸々の自動化用。
 
-#Chromeフォルダ
-##Browser.py
+# Chromeフォルダ
+## Browser.py
 ブラウザ本体を動かす用，ドライバは都度自動更新
-##Kaikei.py
+## Kaikei.py
 見える会計操作用，購入依頼明細を自動入力
-##Cyboze.py
+## Cyboze.py
 サイボウズ操作用，スケジュール関連機能を実装
-##GoogleCalender.py
+## GoogleCalender.py
 グーグルカレンダー取得用
 
-#Calenderフォルダ
+# Calenderフォルダ
 予定を管理するクラスを保存
-##Event.py
+## Event.py
 予定単体を扱うクラス。サイボウズへの入力が可能
-##Calender.py
+## Calender.py
 予定の集合クラス。集合同士の結合と差分抽出，期間絞り込みが可能。
 
-#更新
+# 更新
 2022/04/01:見える会計への自動入力を追加
 2022/10/01:Edge関連のseleniumの更新が遅く，まともに動作しなくなったためchromeへ移行
 2022/10/01:予定同期関連クラスを追加
