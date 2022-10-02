@@ -1,5 +1,6 @@
 from selenium import webdriver
 from selenium.webdriver.support.select import Select
+
 from selenium.webdriver.common.by import By
 
 class Event():
@@ -39,8 +40,13 @@ class Event():
         driver.find_element(By.NAME, 'Detail').send_keys(self.title)#予定名
         driver.find_element(By.NAME, 'Memo').send_keys(self.id)#uid含む全情報
         driver.find_element(By.NAME, "Entry").click()
-        import time
-        time.sleep(2)
+        #入力完了まで待機
+        from telnetlib import EC
+        from selenium.webdriver.support.wait import WebDriverWait
+        wait = WebDriverWait(driver, 20)
+        wait.until(EC.presence_of_element_located(By.NAME, "Submit"))
+        wait.until(EC.presence_of_element_located(By.CLASS_NAME, "mentionButton mentionButtonSelected"))
+
 
     def delete_cyboze(self, browser):
         """サイボウズの予定削除"""
