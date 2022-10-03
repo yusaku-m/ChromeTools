@@ -59,7 +59,15 @@ class Browser:
 
     def set_id(self):
         """各サイトのidをセット"""
-        pass            
+        pass
+
+    def wait_element(self, element):
+        driver = self.driver
+        #入力完了まで待機
+        from selenium.webdriver.support import expected_conditions as EC
+        from selenium.webdriver.support.wait import WebDriverWait
+        wait = WebDriverWait(driver, 20)
+        wait.until(EC.presence_of_element_located(element))
 
     def wait_download(self):
         import glob

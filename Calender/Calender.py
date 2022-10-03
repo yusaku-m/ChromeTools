@@ -169,7 +169,7 @@ class GoogleCalender(Calender):
                     #終了日を取得        
                     if 'UNTIL=' in repeat_rule:                    #日時指定の場合
                         untiltime = repeat_rule.split('UNTIL=')[1].split(';')[0]
-                        print(f'{name}, {rstart_time}, {untiltime}')
+                        #print(f'{name}, {rstart_time}, {untiltime}')
                         try:
                             untiltime = datetime.strptime(untiltime, '%Y%m%dT%H%M%SZ') + timedelta(hours = 9)
                         except:

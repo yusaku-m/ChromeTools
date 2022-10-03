@@ -41,11 +41,7 @@ class Event():
         driver.find_element(By.NAME, 'Memo').send_keys(self.id)#uid含む全情報
         driver.find_element(By.NAME, "Entry").click()
         #入力完了まで待機
-        from telnetlib import EC
-        from selenium.webdriver.support.wait import WebDriverWait
-        wait = WebDriverWait(driver, 20)
-        wait.until(EC.presence_of_element_located(By.NAME, "Submit"))
-        wait.until(EC.presence_of_element_located(By.CLASS_NAME, "mentionButton mentionButtonSelected"))
+        browser.wait_element((By.NAME, "Submit"))
 
 
     def delete_cyboze(self, browser):
@@ -67,7 +63,7 @@ class Event():
         driver.find_element(By.LINK_TEXT, self.title).click()
         driver.find_element(By.LINK_TEXT, '削除する').click()
         driver.find_element(By.NAME, "Yes").click()
-
+    
 class AllDay(Event):
     """終日予定"""
     def input_cyboze(self, browser):
@@ -81,6 +77,8 @@ class AllDay(Event):
         driver.find_element(By.NAME, 'Detail').send_keys(self.title)#予定名
         driver.find_element(By.NAME, 'Memo').send_keys(self.id)#uid含む全情報
         driver.find_element(By.NAME, "Entry").click()
+        
+        browser.wait_element((By.NAME, "Submit"))
 
 class MultiDay(Event):
     """複数日予定"""
