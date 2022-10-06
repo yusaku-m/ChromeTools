@@ -19,7 +19,7 @@ class Browser:
         options.add_argument("disable-infobars")
         options.add_argument('--lang=en')
         options.add_argument(f'--user-data-dir={userdata_path}')
-        options.add_argument('--profile-directory=Default')#ユーザーとして起動（パスワード自動入力のため）
+        options.add_argument('--profile-directory=Default') #ユーザーとして起動（パスワード自動入力のため）
         options.add_argument("--remote-debugging-port=9222") 
 
         #ダウンロード先を変更

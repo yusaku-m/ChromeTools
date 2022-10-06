@@ -136,10 +136,8 @@ class GoogleCalender(Calender):
                     edaytime = datetime.strptime(end_day, '%Y%m%d')
                     id = str([name, sdaytime, edaytime, uid])
                     delta = edaytime - sdaytime
-                    if delta.days == 1:
-                        self.events.append(Event.AllDay(name, sdaytime, edaytime, id))
-                    else:
-                        self.events.append(Event.MultiDay(name, sdaytime, edaytime, id))
+                    for i in range(delta.days):
+                        self.events.append(Event.AllDay(name,sdaytime+timedelta(days=i),sdaytime+timedelta(days=i+1),id))
                 #時間予定
                 if start_time != '':
                     sdaytime = datetime.strptime(start_time, '%Y%m%dT%H%M%SZ') + timedelta(hours = 9)
