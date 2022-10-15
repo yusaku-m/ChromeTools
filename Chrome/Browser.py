@@ -1,6 +1,11 @@
 import os
 import pandas as pd
 import pickle
+from pyautogui import sleep
+
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
 
 class Browser:
     """ブラウザ操作クラス"""
@@ -9,16 +14,12 @@ class Browser:
         #初期設定
         self.driver_path = "./Chrome/Chromedriver.exe"
         self.open_status()
-
-        from selenium import webdriver
-        from selenium.webdriver.chrome.options import Options
-        from webdriver_manager.chrome import ChromeDriverManager
+        self.userdata_path = userdata_path
         
-        #バージョンの確認,Chromeが更新されていればドライバを更新
         options = Options()
         options.add_argument("disable-infobars")
         options.add_argument('--lang=en')
-        options.add_argument(f'--user-data-dir={userdata_path}')
+        options.add_argument(f'--user-data-dir={self.userdata_path}')
         options.add_argument('--profile-directory=Default') #ユーザーとして起動（パスワード自動入力のため）
         options.add_argument("--remote-debugging-port=9222") 
 
@@ -82,5 +83,22 @@ class Browser:
                 extension = os.path.splitext(download_fileName)
                 if '.crdownload' in extension:
                     n += 1 
-    def close(self):
+    def close(self, initialize = 0):
         self.driver.quit()
+        if initialize==1:
+            options = Options()
+            options.add_argument("disable-infobars")
+            options.add_argument('--lang=en')
+            options.add_argument('--profile-directory=Default') #ユーザーとして起動（パスワード自動入力のため）
+            options.add_argument("--remote-debugging-port=9222") 
+
+            #ダウンロード先を元に戻す
+            import getpass
+            options.add_argument(f'--user-data-dir={self.userdata_path}')
+            options.add_experimental_option('prefs', {'download.default_directory': f"C:/Users/{getpass.getuser()}/Downloads"})
+            options.add_experimental_option('excludeSwitches', ['enable-logging']) #エラー非表示
+            #ドライバの読み込み
+            driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
+            #タイムアウト設定
+            
+            driver.quit()

@@ -54,4 +54,4 @@ input.view()
 cyboze.input_schedule(input)
 
 """終了"""
-cyboze.close()
+cyboze.close(1)

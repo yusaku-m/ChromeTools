@@ -86,4 +86,5 @@ class MultiDay(Event):
         super().__init__(title, st, et, id)
     def input_cyboze(self, driver):
         """期間予定はサイボウズでcsv出力できないので入力しない。"""
+        """または，複数の終日予定に分割？"""
         pass     

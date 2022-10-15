@@ -1,4 +1,4 @@
-from Browser import Browser
+from Chrome.Browser import Browser
 from selenium.webdriver.common.by import By
 
 class Kaikei(Browser):
