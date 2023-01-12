@@ -95,7 +95,7 @@ class Browser:
             #ダウンロード先を元に戻す
             import getpass
             options.add_argument(f'--user-data-dir={self.userdata_path}')
-            options.add_experimental_option('prefs', {'download.default_directory': f"C:/Users/{getpass.getuser()}/Downloads"})
+            options.add_experimental_option('prefs', {'download.default_directory': f"Downloads"})
             options.add_experimental_option('excludeSwitches', ['enable-logging']) #エラー非表示
             #ドライバの読み込み
             driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)

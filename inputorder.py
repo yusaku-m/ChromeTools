@@ -8,9 +8,11 @@ browser = Kaikei(user_data_path)
 
 import pandas as pd
 dir = 'C:/Users/Yusaku/独立行政法人 国立高等専門学校機構/前田研究室 - General/研究室資料/物品購入'
-df = pd.read_csv(f'{dir}/ItemList20221015.csv', header=0, encoding = 'shift_jis')
+df = pd.read_csv(f'{dir}/ItemList20230112.csv', header=0, encoding = 'shift_jis')
+print(df)
 for index, row in df.iterrows():
-    item        = f'{row["品名"]}_{row["型番"]}({row["色・サイズ等"]})'
+    print(row)
+    item        = f'{row["品名"]}_{row["型番"]}'
     quantity    = row["数量"]
     unit_price  = row["単価（税込）"]
     place       = row["納入場所"]
