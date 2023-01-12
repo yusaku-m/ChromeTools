@@ -12,7 +12,7 @@ df = pd.read_csv(f'{dir}/ItemList20230112.csv', header=0, encoding = 'shift_jis'
 print(df)
 for index, row in df.iterrows():
     print(row)
-    item        = f'{row["品名"]}_{row["型番"]}'
+    item        = f'{row["品名"]}'#_{row["型番"]}'
     quantity    = row["数量"]
     unit_price  = row["単価（税込）"]
     place       = row["納入場所"]

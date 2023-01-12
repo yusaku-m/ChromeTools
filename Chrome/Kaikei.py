@@ -5,6 +5,7 @@ class Kaikei(Browser):
     def __init__(self, userdata_path):
         super().__init__(userdata_path)
         self.driver.get('https://zaimu-kaikei.kosen-k.go.jp/llas5/view/login.html')
+        self.driver.get('https://zaimu-kaikei.kosen-k.go.jp/llas5/view/login.html')
         self.wait_element((By.ID, 'cCdSb'))
         from selenium.webdriver.support.select import Select
         print("login...")
