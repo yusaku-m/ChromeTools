@@ -7,10 +7,17 @@ class Kaikei(Browser):
         self.driver.get('https://zaimu-kaikei.kosen-k.go.jp/llas5/view/login.html')
         self.driver.get('https://zaimu-kaikei.kosen-k.go.jp/llas5/view/login.html')
         self.wait_element((By.ID, 'cCdSb'))
+
+        #ログイン
         from selenium.webdriver.support.select import Select
         print("login...")
         Select(self.driver.find_element(By.ID, 'cCdSb')).select_by_visible_text('39/39_香川高等専門学校')
         self.driver.find_element(By.ID, 'doLogin').click()
+
+        #年度偏光
+        self.wait_element((By.CLASS_NAME, 'S_layoutDisp'))
+        self.driver.find_element(By.CLASS_NAME, 'By.CLASS_NAME').click()
+        self.driver.find_element(By.XPATH, f'//li[contains(text(),"R05")]').click()
 
     def input_order(self, order):
         print("start input order...")
@@ -29,6 +36,7 @@ class Kaikei(Browser):
         #各項目の入力
         self.driver.find_element(By.ID, 'select2-cCdNuhnPlc-container').click()
         self.driver.find_element(By.CLASS_NAME, 'select2-search__field').send_keys(order.place)
+        
         self.driver.find_element(By.XPATH, f'//li[contains(@title,"{order.place}")]' ).click()
         self.driver.find_element(By.ID, 'cHnNameRe').send_keys(order.item)
         self.driver.find_element(By.ID, 'cSu').send_keys(order.quantity)
@@ -36,6 +44,7 @@ class Kaikei(Browser):
         #新規作成
         self.driver.find_element(By.ID, 'select2-skkuSskYsn-1-container').click()
         self.driver.find_element(By.ID, 'S_CreateNew').click()
+
         from selenium.webdriver.support.ui import WebDriverWait
         from selenium.webdriver.support import expected_conditions as EC
         from selenium.common.exceptions import TimeoutException

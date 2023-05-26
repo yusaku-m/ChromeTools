@@ -45,6 +45,7 @@ def get_working_calender():
                 else:
                     working_times = np.vstack((working_times, [year, act_month, act_day, working_time])) 
     return working_times
+
 def workcalender_to_ical(working_times):
     f = open('Office_Hour.ics', 'w', encoding='utf-8')
     #ヘッダーの書き込み
@@ -69,6 +70,7 @@ def workcalender_to_ical(working_times):
     )
     
     for event in working_times:
+        print(event)
         #開始時間（dtstart）の作成
         year = str(event[0])
         month = str(event[1]).zfill(2)

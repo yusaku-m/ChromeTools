@@ -4,4 +4,4 @@
 *.ics
 *.csv
 *.pdf
-/data/*.*
+/data/*
