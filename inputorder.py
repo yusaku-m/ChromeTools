@@ -8,9 +8,9 @@ browser = Kaikei(user_data_path)
 
 import pandas as pd
 dir = 'C:/Users/Yusaku/独立行政法人 国立高等専門学校機構/前田研究室 - General/研究室資料/物品購入'
-df = pd.read_csv(f'{dir}/ItemList20230404.csv', header=0, encoding = 'shift_jis')
+df = pd.read_csv(f'{dir}/ItemList20230526.csv', header=0, encoding = 'shift_jis')
 print(df)
-for index, row in df.iterrows():
+for index, row in df.fillna('').iterrows():
     print(row)
     item        = f'{row["品名"]}'#_{row["型番"]}'
     quantity    = row["数量"]
@@ -23,5 +23,4 @@ for index, row in df.iterrows():
     #購入依頼を入力
     browser.input_order(order)
 
-    
 browser.close(1)
