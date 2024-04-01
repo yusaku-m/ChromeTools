@@ -8,7 +8,7 @@ browser = Kaikei(user_data_path)
 
 import pandas as pd
 dir = 'C:/Users/Yusaku/独立行政法人 国立高等専門学校機構/前田研究室 - General/研究室資料/物品購入'
-df = pd.read_csv(f'{dir}/ItemList20230526.csv', header=0, encoding = 'shift_jis')
+df = pd.read_csv(f'{dir}/ItemList20230628.csv', header=0, encoding = 'shift_jis')
 print(df)
 for index, row in df.fillna('').iterrows():
     print(row)

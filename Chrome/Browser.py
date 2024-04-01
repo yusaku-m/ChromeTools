@@ -5,7 +5,7 @@ from pyautogui import sleep
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
+import chromedriver_binary
 
 class Browser:
     """ブラウザ操作クラス"""
@@ -27,7 +27,7 @@ class Browser:
         options.add_experimental_option('prefs', {'download.default_directory': f"{os.getcwd()}\\data"})
         options.add_experimental_option('excludeSwitches', ['enable-logging']) #エラー非表示
         #ドライバの読み込み
-        driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
+        driver = webdriver.Chrome(options=options)
         #driver.maximize_window()
         #タイムアウト設定
         driver.set_page_load_timeout(120)
@@ -98,7 +98,7 @@ class Browser:
             options.add_experimental_option('prefs', {'download.default_directory': f"Downloads"})
             options.add_experimental_option('excludeSwitches', ['enable-logging']) #エラー非表示
             #ドライバの読み込み
-            driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
+            driver = webdriver.Chrome(options=options)
             #タイムアウト設定
             
             driver.quit()
