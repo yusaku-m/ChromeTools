@@ -11,7 +11,7 @@ class GoogleCalender(Browser):
         shutil.unpack_archive(f"./data/{id}@gmail.com.ical.zip", self.calenderpass)
         import os
         os.remove(f"./data/{id}@gmail.com.ical.zip")
-    
+        
     def set_id(self, id):
         self.open_status()
         self.set_status('googleID', id)
