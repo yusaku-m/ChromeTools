@@ -80,7 +80,7 @@ class CybozeCalender(Calender):
         for index, row in df.iterrows():
             from datetime import datetime
             from datetime import timedelta
-            if pd.isnull(row["開始時刻"]):
+            if pd.isnull(row["開始時刻"]) or pd.isnull(row["終了時刻"]):
                 #終日予定
                 start_time = datetime.strptime(f'{row["開始日付"]}', "%Y/%m/%d")
                 end_time = datetime.strptime(f'{row["終了日付"]}', "%Y/%m/%d") + timedelta(days=1)
@@ -111,22 +111,41 @@ class GoogleCalender(Calender):
         except_num = 0
         from tqdm import tqdm
         for raw_schedule in tqdm(raw_calender[1:]):
+
             #単発予定の情報を抽出
             name        = self.extract(raw_schedule, 'SUMMARY:') 
             start_day   = self.extract(raw_schedule, 'DTSTART;VALUE=DATE:')
             end_day     = self.extract(raw_schedule, 'DTEND;VALUE=DATE:')
+
+            #開始時間の検索
             start_time  = self.extract(raw_schedule, 'DTSTART:')
+            if start_time != "":
+                sdaytime = datetime.strptime(start_time, '%Y%m%dT%H%M%SZ') + timedelta(hours = 9)
+
+            start_time = self.extract(raw_schedule, 'DTSTART;TZID=Asia/Tokyo:')
+            if start_time != "":
+                sdaytime = datetime.strptime(start_time, '%Y%m%dT%H%M%S')
+            
+            #修了時間の検索
             end_time    = self.extract(raw_schedule, 'DTEND:')
+            if end_time != "":
+                edaytime = datetime.strptime(end_time, '%Y%m%dT%H%M%SZ') + timedelta(hours = 9)
+
+            end_time    = end_time = self.extract(raw_schedule, 'DTEND;TZID=Asia/Tokyo:')
+            if end_time != "":
+                edaytime = datetime.strptime(end_time, '%Y%m%dT%H%M%S')
+
             uid         = self.extract(raw_schedule, 'UID:')
+
             #繰り返し予定の情報を抽出
             repeat_rule = self.extract(raw_schedule, 'RRULE:')
-            rstart_time = self.extract(raw_schedule, 'DTSTART;TZID=Asia/Tokyo:')
-            rend_time   = self.extract(raw_schedule, 'DTEND;TZID=Asia/Tokyo:')
             on_weekday  = self.extract(raw_schedule, 'BYDAY=') # 実施曜日(MO,TU,WE,TH,FR,SA,SU)
             except_date = self.extract(raw_schedule, 'EXDATE;TZID=Asia/Tokyo:')
             origin_date = self.extract(raw_schedule, 'RECURRENCE-ID;TZID=Asia/Tokyo:')
+
             #日時情報を抽出
             #print(f'{name}, {start_time}, {end_time}, {rstart_time}, {rend_time}, {repeat_rule}, {uid}')
+
             #単発予定の場合
             if repeat_rule == '':
                 #予定の追加
@@ -138,28 +157,24 @@ class GoogleCalender(Calender):
                     delta = edaytime - sdaytime
                     for i in range(delta.days):
                         self.events.append(Event.AllDay(name,sdaytime+timedelta(days=i),sdaytime+timedelta(days=i+1),id))
+                
                 #時間予定
-                if start_time != '':
-                    sdaytime = datetime.strptime(start_time, '%Y%m%dT%H%M%SZ') + timedelta(hours = 9)
-                    try:
-                        edaytime = datetime.strptime(end_time, '%Y%m%dT%H%M%SZ') + timedelta(hours = 9)
-                    except:
-                        edaytime = sdaytime
+                if start_day == '':
+                    #edaytime = sdaytime
                     id = str([name, sdaytime, edaytime, uid])
                     self.events.append(Event.Event(name, sdaytime, edaytime, id))
+
                 #繰り返しの例外予定
                 if origin_date != '':
                     odaytime = datetime.strptime(origin_date, '%Y%m%dT%H%M%S')
+                    print(odaytime)
                     #変更元の予定を削除
-                    self.events = [event for event in self.events if not (event.start_time == odaytime and event.id == uid)]
+                    self.events = [event for event in self.events if not (event.start_time == odaytime and uid in event.id)]
 
             #繰り返し予定（かつ時間有）の場合
-            if repeat_rule != '' and rstart_time != '' and rend_time != '':
+            if repeat_rule != '' and start_time != '' and end_time != '':
                 #毎週繰り返しの場合
                 if 'FREQ=WEEKLY' in repeat_rule:
-                    #初回予定を取得
-                    sdaytime = datetime.strptime(rstart_time, '%Y%m%dT%H%M%S')
-                    edaytime = datetime.strptime(rend_time, '%Y%m%dT%H%M%S')
                     #除外日を取得
                     exceptdaytimes = []
                     for i in range(int(len(except_date)/15)):
@@ -193,6 +208,7 @@ class GoogleCalender(Calender):
                         #次の日へ
                         sdaytime += timedelta(days = 1)
                         edaytime += timedelta(days = 1)
+
     def extract(self, raw, search):
         if search in raw:
             buf = raw.split(search)

@@ -1,4 +1,4 @@
-from Browser import Browser
+from .Browser import Browser
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.select import Select
 import pandas
@@ -36,11 +36,13 @@ class Sakura(Browser):
         for to in message.to:
             self.driver.find_element(By.XPATH, f"//*[@data-name='{to}']").click()
 
-        #送信設定
         self.driver.find_elements(By.CLASS_NAME, "work_btn.work_add.rightbtn")[0].click()
         self.driver.find_elements(By.CLASS_NAME, "work_btn.work_next.rightbtn")[3].click()
+
+        #送信設定
+        self.driver.find_element(By.XPATH, '//div[text()="設定"]').click()
         self.driver.find_element(By.XPATH, f"//*[@for='rdoInsertAccountName_ON']").click()
-        self.driver.find_element(By.XPATH, '//div[text()="決定"]').click()
+        self.driver.find_element(By.XPATH, "//*[@onclick='MsgEditWorker.DefineOptionDialog()']").click()
         print("mail maked")        
 
 
@@ -75,5 +77,5 @@ if __name__ == "__main__":
     sakura = Sakura(user_data_path)
 
     sakura.make_mail(message)
-    
+
     

@@ -13,9 +13,11 @@ chrome.close()
 
 #指定カレンダーの結合
 
-calender_list = ['Lab_maedalab17@gmail.com.ics', 
-                "Office Hour_e060c425acb379078e9779c94e3ee0df4e619750bf4adbdd7a00cd47a0866a19@group.calendar.google.com.ics",
-                "Work_jagaimo13@gmail.com.ics"]
+calender_list = [
+    'Lab_maedalab17@gmail.com.ics',
+    "Work_jagaimo13@gmail.com.ics",
+    "Office Hour_c04ca1c5bc84b675f8deec736a75ef5f2a3bd9636dc7ad0280f34bb5f0461dd9@group.calendar.google.com.ics",
+    ]
 
 gcal = []
 for calender in calender_list:
@@ -24,7 +26,9 @@ for calender in calender_list:
         gcal = buf
     else:
         gcal = buf.union(gcal)
-
+    
+    print(calender)
+    print(gcal.view())
 
 """サイボウズカレンダーに自動入力された予定の取得"""
 user_data_path = "C:/Users/Yusaku/AppData/Local/Google/Chrome/User Data/"
@@ -45,7 +49,7 @@ ccal_filter = ccal.filtering_by_date(start,end)
 
 """サイボウズにしかない予定の削除"""
 delete = ccal_filter.substract(gcal_filter, 'delete')
-delete.view(id=True)
+delete.view(id=False)
 cyboze.delete_schedule(delete)
 
 """グーグルカレンダーにしかない予定の入力"""
