@@ -42,7 +42,9 @@ class Sakura(Browser):
         #送信設定
         self.driver.find_element(By.XPATH, '//div[text()="設定"]').click()
         self.driver.find_element(By.XPATH, f"//*[@for='rdoInsertAccountName_ON']").click()
-        self.driver.find_element(By.XPATH, "//*[@onclick='MsgEditWorker.DefineOptionDialog()']").click()
+        self.driver.find_elements(By.CLASS_NAME, "work_btn.work_define.rightbtn")[4].click()
+        
+        #self.driver.find_element(By.XPATH, "//*[@onclick='MsgEditWorker.DefineOptionDialog()']").click()
         print("mail maked")        
 
 

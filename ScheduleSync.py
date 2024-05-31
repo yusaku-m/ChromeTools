@@ -4,6 +4,12 @@ from Chrome.GoogleCalender import GoogleCalender
 from Chrome.Cyboze import Cyboze
 from Calender import Calender
 
+"""
+when you first use selenium, you have to install driver by pip command.
+
+pip install chromedriver-binary== (your chrome version: eg. 125.0.6422.78)
+"""
+
 """グーグルカレンダーの取得"""
 user_data_path = "C:/Users/Yusaku/AppData/Local/Google/Chrome/User Data/"
 chrome = GoogleCalender(user_data_path)

@@ -76,7 +76,10 @@ class CybozeCalender(Calender):
         super().__init__(name)
         self.name = name
         import pandas as pd
-        df = pd.read_csv(source, sep=',', header = 0, encoding = 'cp932')
+        try:
+            df = pd.read_csv(source, sep=',', header = 0, encoding = 'cp932')
+        except:
+            df = pd.read_csv(source, sep=',', header = 0, encoding = 'utf-8')
         for index, row in df.iterrows():
             from datetime import datetime
             from datetime import timedelta
@@ -94,7 +97,7 @@ class CybozeCalender(Calender):
 
 class GoogleCalender(Calender):
     """googleカレンダー予定"""
-    def __init__(self, name ='calender', source = None):
+    def __init__(self, name ='calender', source = None, unifiedeventname = None):
         super().__init__(name)  
         self.name = name
         self.events = []
@@ -113,7 +116,11 @@ class GoogleCalender(Calender):
         for raw_schedule in tqdm(raw_calender[1:]):
 
             #単発予定の情報を抽出
-            name        = self.extract(raw_schedule, 'SUMMARY:') 
+            if unifiedeventname == None:
+                name = self.extract(raw_schedule, 'SUMMARY:') 
+            else:
+                name = unifiedeventname
+                
             start_day   = self.extract(raw_schedule, 'DTSTART;VALUE=DATE:')
             end_day     = self.extract(raw_schedule, 'DTEND;VALUE=DATE:')
 

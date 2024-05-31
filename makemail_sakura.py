@@ -12,3 +12,5 @@ user_data_path = "C:/Users/Yusaku/AppData/Local/Google/Chrome/User Data/"
 sakura = Chrome.Sakura(user_data_path)
 
 sakura.make_mail(message)
+
+input()
