@@ -7,8 +7,9 @@ class GoogleCalender(Browser):
         self.wait_download()
         self.calenderpass = './data/GoogleCalender'
         id = self.status.at['googleID', 'value']
-        import shutil
-        shutil.unpack_archive(f"./data/{id}@gmail.com.ical.zip", self.calenderpass)
+        import zipfile
+        with zipfile.ZipFile(f"./data/{id}@gmail.com.ical.zip", 'r') as zip_ref:
+            zip_ref.extractall(self.calenderpass)
         import os
         os.remove(f"./data/{id}@gmail.com.ical.zip")
         

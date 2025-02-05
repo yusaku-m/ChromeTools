@@ -6,6 +6,7 @@ from pyautogui import sleep
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 import chromedriver_binary
+import psutil
 
 class Browser:
     """ブラウザ操作クラス"""
@@ -13,6 +14,7 @@ class Browser:
         """userdata_pathはChrome://version/の「Profile path」を使用すると保存しているパスワードが有効に"""
         #初期設定
         self.driver_path = "./Chrome/Chromedriver.exe"
+        self.terminate_chrome_processes()  # Chromeのプロセスを終了する処理を追加
         self.open_status()
         self.userdata_path = userdata_path
         
@@ -23,17 +25,39 @@ class Browser:
         options.add_argument('--profile-directory=Default') #ユーザーとして起動（パスワード自動入力のため）
         options.add_argument("--remote-debugging-port=9222") 
 
-        #ダウンロード先を変更
-        options.add_experimental_option('prefs', {'download.default_directory': f"{os.getcwd()}\\data"})
+        # ダウンロード先を変更
+        options.add_experimental_option('prefs', {
+            'download.default_directory': f"{os.getcwd()}\\data",
+            'download.directory_upgrade': True,  # 既存のダウンロード先をアップグレード
+            'download.prompt_for_download': False,  # ダウンロード確認ダイアログを無効化
+            'safebrowsing.enabled': True  # セーフブラウジングを有効にして、セキュリティ警告を無効に
+        })        
+        
         options.add_experimental_option('excludeSwitches', ['enable-logging']) #エラー非表示
+        
         #ドライバの読み込み
-        driver = webdriver.Chrome(options=options)
+        while True:
+            try:
+                driver = webdriver.Chrome(options=options)
+                break
+            except:
+                sleep(1)
         #driver.maximize_window()
         #タイムアウト設定
         driver.set_page_load_timeout(120)
         driver.implicitly_wait(10) #要素が見つかるまで待つ時間
         self.driver = driver
-        
+
+    def terminate_chrome_processes(self):
+        """手動で開かれているChromeのプロセスを終了"""
+        for proc in psutil.process_iter(attrs=['pid', 'name']):
+            try:
+                # プロセス名がchromeの場合
+                if 'chrome' in proc.info['name'].lower():
+                    proc.terminate()  # プロセスを終了
+                    print(f"Terminated Chrome process with PID {proc.info['pid']}")
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                pass
 
     def open_status(self):
         """現状ステータスの読み込み"""
