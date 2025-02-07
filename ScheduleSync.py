@@ -68,7 +68,7 @@ while True:
         input_events = gcal_filter.substract(ccal_filter, 'input')
         if len(input_events.events) > 0:
             input_events.view()
-            cyboze.input_schedule(input)
+            cyboze.input_schedule(input_events)
         else:
             print("No input event")
 
@@ -83,7 +83,7 @@ while True:
         print("pip install chromedriver-binary== (your chrome version: eg. 125.0.6422.78)")
         print("or you have to install chromedriver-binary-auto")
         print("You can see your chrome version by 'chrome://version/'")
-        print("pip install chromedriver-binary-auto")
+        print("or pip install chromedriver-binary-auto")
         
         input("If you want to continue, press any key. If you want to stop, press Ctrl + C")
 
