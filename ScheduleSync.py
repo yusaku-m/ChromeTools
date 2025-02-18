@@ -9,6 +9,7 @@ when you first use selenium, you have to install driver by pip command.
 
 pip install chromedriver-binary== (your chrome version: eg. 125.0.6422.78)
 """
+print("sync start")
 
 while True:
     try:
