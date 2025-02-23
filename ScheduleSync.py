@@ -38,7 +38,7 @@ while True:
                 gcal = buf.union(gcal)
             
             print(calender)
-            print(gcal.view())
+            #print(gcal.view())
 
         """サイボウズカレンダーに自動入力された予定の取得"""
         user_data_path = "C:/Users/Yusaku/AppData/Local/Google/Chrome/User Data/"
