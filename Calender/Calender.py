@@ -174,7 +174,7 @@ class GoogleCalender(Calender):
                 #繰り返しの例外予定
                 if origin_date != '':
                     odaytime = datetime.strptime(origin_date, '%Y%m%dT%H%M%S')
-                    print(odaytime)
+                    #print(odaytime)
                     #変更元の予定を削除
                     self.events = [event for event in self.events if not (event.start_time == odaytime and uid in event.id)]
 

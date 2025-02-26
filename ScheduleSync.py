@@ -9,6 +9,7 @@ when you first use selenium, you have to install driver by pip command.
 
 pip install chromedriver-binary== (your chrome version: eg. 125.0.6422.78)
 """
+print("sync start")
 
 while True:
     try:
@@ -37,7 +38,7 @@ while True:
                 gcal = buf.union(gcal)
             
             print(calender)
-            print(gcal.view())
+            #print(gcal.view())
 
         """サイボウズカレンダーに自動入力された予定の取得"""
         user_data_path = "C:/Users/Yusaku/AppData/Local/Google/Chrome/User Data/"
