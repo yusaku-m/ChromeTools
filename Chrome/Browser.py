@@ -38,7 +38,9 @@ class Browser:
         #ドライバの読み込み
         while True:
             try:
+                print("Driver loading...")
                 driver = webdriver.Chrome(options=options)
+                print("OK.")
                 break
             except:
                 sleep(1)
