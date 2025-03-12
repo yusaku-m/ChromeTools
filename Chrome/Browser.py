@@ -11,6 +11,10 @@ import psutil
 class Browser:
     """ブラウザ操作クラス"""
     def __init__(self, userdata_path):
+        #ドライバーのアップデートチェック
+        import subprocess
+        subprocess.run(["pip", "install", "chromedriver-binary-auto"], check=True)
+
         """userdata_pathはChrome://version/の「Profile path」を使用すると保存しているパスワードが有効に"""
         #初期設定
         self.driver_path = "./Chrome/Chromedriver.exe"
