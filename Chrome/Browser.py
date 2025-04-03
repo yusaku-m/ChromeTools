@@ -13,7 +13,8 @@ class Browser:
     def __init__(self, userdata_path):
         #ドライバーのアップデートチェック
         import subprocess
-        subprocess.run(["pip", "install", "chromedriver-binary-auto"], check=True)
+        #subprocess.run(["python", "-m", "pip", "install", "--upgrade", "pip"], check=True)
+        #subprocess.run(["pip", "install", "--upgrade", "chromedriver-binary-auto"], check=True)
 
         """userdata_pathはChrome://version/の「Profile path」を使用すると保存しているパスワードが有効に"""
         #初期設定

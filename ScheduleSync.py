@@ -8,6 +8,11 @@ from Calender import Calender
 when you first use selenium, you have to install driver by pip command.
 
 pip install chromedriver-binary== (your chrome version: eg. 125.0.6422.78)
+
+2025/3/27現在，以下のコマンドでインストールしたバージョンは即閉じが発生
+or you have to install chromedriver-binary-auto
+
+You can see your chrome version by 'chrome://version/'
 """
 print("sync start")
 
@@ -26,7 +31,7 @@ while True:
         calender_list = [
             'Lab_maedalab17@gmail.com.ics',
             "Work_jagaimo13@gmail.com.ics",
-            "Office Hour_c04ca1c5bc84b675f8deec736a75ef5f2a3bd9636dc7ad0280f34bb5f0461dd9@group.calendar.google.com.ics",
+            "Office_Hour_277ef437beac7b8e071b76be72a8d55738862bf290b78395133241b387847800@group.calendar.google.com.ics",
             ]
 
         gcal = []

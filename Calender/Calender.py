@@ -6,6 +6,7 @@ class Calender():
         self.name = name
         self.events = source
 
+
     def view(self, id = False):
         for i, event in enumerate(self.events):
             print(f'{self.name}{i}', end=':')
@@ -94,6 +95,9 @@ class CybozeCalender(Calender):
             if not pd.isnull(row["メモ"]): #nanエラー会費
                 if 'datetime.datetime(' in row["メモ"]: #他の方が入力した予定はカウントしない 
                     self.events.append(Event.Event(row["予定詳細"], start_time, end_time, row["メモ"]))
+        #読み込み完了後，sourceを削除
+        import os
+        os.remove(source)
 
 class GoogleCalender(Calender):
     """googleカレンダー予定"""
@@ -215,6 +219,10 @@ class GoogleCalender(Calender):
                         #次の日へ
                         sdaytime += timedelta(days = 1)
                         edaytime += timedelta(days = 1)
+        # 読み込み完了後，sourceを削除
+        import os
+        os.remove(f"./data/GoogleCalender/{source}")
+        
 
     def extract(self, raw, search):
         if search in raw:
