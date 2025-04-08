@@ -1,4 +1,5 @@
 from Calender import Event
+from tqdm import tqdm
 
 class Calender():
     """複数予定の集合"""
@@ -81,7 +82,7 @@ class CybozeCalender(Calender):
             df = pd.read_csv(source, sep=',', header = 0, encoding = 'cp932')
         except:
             df = pd.read_csv(source, sep=',', header = 0, encoding = 'utf-8')
-        for index, row in df.iterrows():
+        for index, row in tqdm(df.iterrows()):
             from datetime import datetime
             from datetime import timedelta
             if pd.isnull(row["開始時刻"]) or pd.isnull(row["終了時刻"]):
@@ -116,7 +117,7 @@ class GoogleCalender(Calender):
         ThisMonth = datetime.today().month
         #print(ThisYear, ThisMonth)
         except_num = 0
-        from tqdm import tqdm
+
         for raw_schedule in tqdm(raw_calender[1:]):
 
             #単発予定の情報を抽出

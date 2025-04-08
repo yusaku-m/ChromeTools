@@ -44,7 +44,7 @@ class Event():
         browser.wait_element((By.NAME, "Submit"))
 
 
-    def delete_cyboze(self, browser):
+    def delete_cyboze(self, browser,monitor = False):
         """サイボウズの予定削除"""
         #現在の西暦を取得
         driver = browser.driver
@@ -54,8 +54,20 @@ class Event():
 
         from datetime import datetime
         date = f'{datetime.now().year}.{datetime.now().month}.{datetime.now().day}'
-        driver.get(f"https://cybozu.da.kagawa-nct.ac.jp/scripts/cbag/ag.exe?page=ScheduleSearch&CP=sg&uid={uid}&gid={gid}&date=da.{date}&Text=")
-        driver.find_element(By.XPATH, "//input[@type='text'][@class=''][@name='Text']").send_keys(self.id)
+        terget_url = f'https://cybozu.da.kagawa-nct.ac.jp/scripts/cbag/ag.exe?page=ScheduleSearch&CP=sg&uid={uid}&gid={gid}&date=da.{date}&Text='
+        
+        while True:
+            try:
+                if monitor:
+                    print(terget_url)
+                driver.get(terget_url)
+                driver.find_element(By.XPATH, "//input[@type='text'][@class=''][@name='Text']").send_keys(self.id)
+                break
+
+            except:
+                print("Wait for loading page")
+                pass
+
         select = Select(driver.find_element(By.NAME, "ED.Year"))
         select.select_by_index(len(select.options)-1)
         driver.find_element(By.NAME, "Submit").click()
@@ -63,6 +75,8 @@ class Event():
         driver.find_element(By.LINK_TEXT, self.title).click()
         driver.find_element(By.LINK_TEXT, '削除する').click()
         driver.find_element(By.NAME, "Yes").click()
+        #削除完了まで待機
+        browser.wait_element((By.LINK_TEXT, "タイムカード"))
     
 class AllDay(Event):
     """終日予定"""
