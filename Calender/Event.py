@@ -30,13 +30,22 @@ class Event():
         gid = status.at['CybozeGID', 'value']
 
         date = f'{self.start_time.year}.{self.start_time.month}.{self.start_time.day}'
-        
-        driver.get(f'https://cybozu.da.kagawa-nct.ac.jp/scripts/cbag/ag.exe?page=ScheduleEntry&UID={uid}&GID={gid}&Date=da.{date}&cp=sg')
+        terget_url = f'https://cybozu.da.kagawa-nct.ac.jp/scripts/cbag/ag.exe?page=ScheduleEntry&UID={uid}&GID={gid}&Date=da.{date}&cp=sg'
 
-        Select(driver.find_element(By.NAME, 'SetTime.Hour')).select_by_visible_text(str(self.start_time.hour) + '時')
-        Select(driver.find_element(By.NAME, 'SetTime.Minute')).select_by_visible_text(str(self.start_time.minute).zfill(2) + '分')
-        Select(driver.find_element(By.NAME, 'EndTime.Hour')).select_by_visible_text(str(self.end_time.hour) + '時')
-        Select(driver.find_element(By.NAME, 'EndTime.Minute')).select_by_visible_text(str(self.end_time.minute).zfill(2) + '分')
+        while True:
+            try:
+                driver.get(terget_url)
+                Select(driver.find_element(By.NAME, 'SetTime.Hour')).select_by_visible_text(str(self.start_time.hour) + '時')
+                Select(driver.find_element(By.NAME, 'SetTime.Minute')).select_by_visible_text(str(self.start_time.minute).zfill(2) + '分')
+                Select(driver.find_element(By.NAME, 'EndTime.Hour')).select_by_visible_text(str(self.end_time.hour) + '時')
+                Select(driver.find_element(By.NAME, 'EndTime.Minute')).select_by_visible_text(str(self.end_time.minute).zfill(2) + '分')
+                break
+
+            except:
+                print("Wait for loading page")
+                pass
+
+
         driver.find_element(By.NAME, 'Detail').send_keys(self.title)#予定名
         driver.find_element(By.NAME, 'Memo').send_keys(self.id)#uid含む全情報
         driver.find_element(By.NAME, "Entry").click()
