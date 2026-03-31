@@ -1,0 +1,8 @@
+[workspace]
+authors = ["Yusaku_MAEDA13 <jagaimo13@gmail.com>"]
+channels = ["conda-forge"]
+name = "ChromeTools"
+platforms = ["win-64"]
+version = "0.1.0"
+
+[tasks]

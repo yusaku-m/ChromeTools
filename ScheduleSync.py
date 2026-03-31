@@ -87,7 +87,6 @@ while True:
         print(e)
         print("error is occured. meybe you have to install driver by pip command.")
         print("pip install chromedriver-binary== (your chrome version: eg. 125.0.6422.78)")
-        print("or you have to install chromedriver-binary-auto")
         print("You can see your chrome version by 'chrome://version/'")
         print("or pip install chromedriver-binary-auto")
         

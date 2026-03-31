@@ -4,8 +4,8 @@ import pickle
 from pyautogui import sleep
 
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-import chromedriver_binary
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 import psutil
 
 class Browser:
@@ -19,17 +19,19 @@ class Browser:
         """userdata_pathはChrome://version/の「Profile path」を使用すると保存しているパスワードが有効に"""
         #初期設定
         self.driver_path = "./Chrome/Chromedriver.exe"
+        self.driver_path = r'/usr/bin/chromedriver'
         self.terminate_chrome_processes()  # Chromeのプロセスを終了する処理を追加
         self.open_status()
         self.userdata_path = userdata_path
         
-        options = Options()
+        options = webdriver.ChromeOptions()
         options.add_argument("disable-infobars")
         options.add_argument('--lang=en')
         options.add_argument(f'--user-data-dir={self.userdata_path}')
         options.add_argument('--profile-directory=Default') #ユーザーとして起動（パスワード自動入力のため）
-        options.add_argument("--remote-debugging-port=9222") 
-
+        options.add_argument("--remote-debugging-port=9223") 
+        options.add_argument('--disable-gpu')
+    
         # ダウンロード先を変更
         options.add_experimental_option('prefs', {
             'download.default_directory': f"{os.getcwd()}\\data",
@@ -38,7 +40,7 @@ class Browser:
             'safebrowsing.enabled': True  # セーフブラウジングを有効にして、セキュリティ警告を無効に
         })        
         
-        options.add_experimental_option('excludeSwitches', ['enable-logging']) #エラー非表示
+        #options.add_experimental_option('excludeSwitches', ['enable-logging']) #エラー非表示
         
         #ドライバの読み込み
         while True:
@@ -47,8 +49,10 @@ class Browser:
                 driver = webdriver.Chrome(options=options)
                 print("OK.")
                 break
-            except:
+            except Exception as e: # 発生した例外を 'e' という変数で受け取る
+                print(f"Driver loading failed: {e}") # エラーメッセージを具体的に出力する
                 sleep(1)
+
         #driver.maximize_window()
         #タイムアウト設定
         driver.set_page_load_timeout(120)
@@ -65,6 +69,7 @@ class Browser:
                     print(f"Terminated Chrome process with PID {proc.info['pid']}")
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 pass
+        sleep(2)
 
     def open_status(self):
         """現状ステータスの読み込み"""
@@ -133,3 +138,8 @@ class Browser:
             #タイムアウト設定
             
             driver.quit()
+
+if __name__ == "__main__":
+    user_data_path = "C:/Users/Yusaku/AppData/Local/Google/Chrome/User Data/"
+    browser = Browser(user_data_path)
+    browser.driver.get('https://www.google.com/')
