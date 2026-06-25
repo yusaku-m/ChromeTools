@@ -5,4 +5,15 @@ name = "ChromeTools"
 platforms = ["win-64"]
 version = "0.1.0"
 
-[tasks]
+[dependencies]
+python = ">=3.10"
+selenium = ">=4.10"
+webdriver-manager = "*"
+pandas = "*"
+psutil = "*"
+pyautogui = "*"
+tqdm = "*"
+openpyxl = "*"
+requests = "*"
+icalendar = "*"
+python-dateutil = "*"

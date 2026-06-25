@@ -1,145 +1,117 @@
 import os
 import pandas as pd
 import pickle
-from pyautogui import sleep
-
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+import time
 import psutil
+from selenium import webdriver
 
 class Browser:
     """ブラウザ操作クラス"""
     def __init__(self, userdata_path):
-        #ドライバーのアップデートチェック
-        import subprocess
-        #subprocess.run(["python", "-m", "pip", "install", "--upgrade", "pip"], check=True)
-        #subprocess.run(["pip", "install", "--upgrade", "chromedriver-binary-auto"], check=True)
-
-        """userdata_pathはChrome://version/の「Profile path」を使用すると保存しているパスワードが有効に"""
-        #初期設定
-        self.driver_path = "./Chrome/Chromedriver.exe"
-        self.driver_path = r'/usr/bin/chromedriver'
-        self.terminate_chrome_processes()  # Chromeのプロセスを終了する処理を追加
+        # 初期設定
+        print("1. Terminating existing Chrome processes...")
+        self.terminate_chrome_processes()
+        
+        print("2. Opening status file...")
         self.open_status()
         self.userdata_path = userdata_path
         
+        print("3. Setting up Chrome options...")
         options = webdriver.ChromeOptions()
+        options.add_argument("--remote-allow-origins=*")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
         options.add_argument("disable-infobars")
-        options.add_argument('--lang=en')
-        options.add_argument(f'--user-data-dir={self.userdata_path}')
-        options.add_argument('--profile-directory=Default') #ユーザーとして起動（パスワード自動入力のため）
-        options.add_argument("--remote-debugging-port=9223") 
+        options.add_argument('--lang=ja-JP')
+        
+        # ユーザーデータディレクトリの正規化
+        clean_path = os.path.normpath(self.userdata_path)
+        options.add_argument(f'--user-data-dir={clean_path}')
+        options.add_argument('--profile-directory=Default') 
         options.add_argument('--disable-gpu')
+        
+        # ログを詳細に出力するように設定
+        # options.add_argument("--verbose")
     
-        # ダウンロード先を変更
+        # ダウンロード先設定
         options.add_experimental_option('prefs', {
-            'download.default_directory': f"{os.getcwd()}\\data",
-            'download.directory_upgrade': True,  # 既存のダウンロード先をアップグレード
-            'download.prompt_for_download': False,  # ダウンロード確認ダイアログを無効化
-            'safebrowsing.enabled': True  # セーフブラウジングを有効にして、セキュリティ警告を無効に
+            'download.default_directory': os.path.join(os.getcwd(), "data"),
+            'download.directory_upgrade': True,
+            'download.prompt_for_download': False,
+            'safebrowsing.enabled': True
         })        
         
-        #options.add_experimental_option('excludeSwitches', ['enable-logging']) #エラー非表示
-        
-        #ドライバの読み込み
-        while True:
-            try:
-                print("Driver loading...")
-                driver = webdriver.Chrome(options=options)
-                print("OK.")
-                break
-            except Exception as e: # 発生した例外を 'e' という変数で受け取る
-                print(f"Driver loading failed: {e}") # エラーメッセージを具体的に出力する
-                sleep(1)
+        try:
+            print(f"4. Starting WebDriver with profile: {clean_path}")
+            print("   (This might take a few seconds if it's downloading a driver...)")
+            
+            # Selenium 4.6以降の標準機能（Selenium Manager）に任せる
+            # webdriver-manager を介さず直接起動を試みる
+            start_time = time.time()
+            self.driver = webdriver.Chrome(options=options)
+            end_time = time.time()
+            
+            print(f"5. Driver loaded successfully! (Time taken: {end_time - start_time:.2f}s)")
+        except Exception as e:
+            print(f"FAILED to load driver: {e}")
+            raise e
 
-        #driver.maximize_window()
-        #タイムアウト設定
-        driver.set_page_load_timeout(120)
-        driver.implicitly_wait(10) #要素が見つかるまで待つ時間
-        self.driver = driver
+        self.driver.set_page_load_timeout(120)
+        self.driver.implicitly_wait(10)
 
     def terminate_chrome_processes(self):
-        """手動で開かれているChromeのプロセスを終了"""
+        """Chromeのプロセスを完全に終了させる"""
+        count = 0
         for proc in psutil.process_iter(attrs=['pid', 'name']):
             try:
-                # プロセス名がchromeの場合
                 if 'chrome' in proc.info['name'].lower():
-                    proc.terminate()  # プロセスを終了
-                    print(f"Terminated Chrome process with PID {proc.info['pid']}")
+                    proc.kill()
+                    count += 1
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 pass
-        sleep(2)
+        if count > 0:
+            print(f"   Killed {count} Chrome processes.")
+        time.sleep(2)
 
     def open_status(self):
         """現状ステータスの読み込み"""
-        if os.path.isfile('./Chrome/status.binaryfile') == True:
-            with open(f'./Chrome/status.binaryfile','rb') as f:
+        status_file = './Chrome/status.binaryfile'
+        if os.path.isfile(status_file):
+            with open(status_file, 'rb') as f:
                 self.status = pickle.load(f)
         else:
             self.status = pd.DataFrame(index=[], columns=['value'])
-            with open(f'./Chrome/status.binaryfile','wb') as f:
-                pickle.dump(self.status, f) 
-
-    def set_status(self, index_name, value):
-        if index_name in self.status.index:
-            self.status.at[index_name, 'value'] = value
-        else:
-            df = pd.DataFrame(value, index = [index_name], columns=['value'])
-            self.status = pd.concat([self.status, df])
             self.save_status()
 
     def save_status(self):
-        import pickle
-        with open(f'./Chrome/status.binaryfile','wb') as f:
-            pickle.dump(self.status, f) 
-
-    def set_id(self):
-        """各サイトのidをセット"""
-        pass
+        with open('./Chrome/status.binaryfile', 'wb') as f:
+            pickle.dump(self.status, f)
 
     def wait_element(self, element):
-        driver = self.driver
-        #入力完了まで待機
         from selenium.webdriver.support import expected_conditions as EC
         from selenium.webdriver.support.wait import WebDriverWait
-        wait = WebDriverWait(driver, 20)
+        wait = WebDriverWait(self.driver, 20)
         wait.until(EC.presence_of_element_located(element))
 
     def wait_download(self):
         import glob
-        n = 1
-        while n != 0:
-            print('waiting download...')
-            import time
+        download_dir = os.path.join(os.getcwd(), "data")
+        print(f'Waiting for download in {download_dir}...')
+        time.sleep(2)
+        while True:
+            downloading_files = glob.glob(os.path.join(download_dir, "*.crdownload"))
+            if not downloading_files:
+                print('Download finished.')
+                break
             time.sleep(2)
-            n = 0
-            import os
-            for download_fileName in glob.glob(f'{os.getcwd()}/*.*'):
-                extension = os.path.splitext(download_fileName)
-                if '.crdownload' in extension:
-                    n += 1 
-    def close(self, initialize = 0):
-        self.driver.quit()
-        if initialize==1:
-            options = Options()
-            options.add_argument("disable-infobars")
-            options.add_argument('--lang=en')
-            options.add_argument('--profile-directory=Default') #ユーザーとして起動（パスワード自動入力のため）
-            options.add_argument("--remote-debugging-port=9222") 
 
-            #ダウンロード先を元に戻す
-            import getpass
-            options.add_argument(f'--user-data-dir={self.userdata_path}')
-            options.add_experimental_option('prefs', {'download.default_directory': f"Downloads"})
-            options.add_experimental_option('excludeSwitches', ['enable-logging']) #エラー非表示
-            #ドライバの読み込み
-            driver = webdriver.Chrome(options=options)
-            #タイムアウト設定
-            
-            driver.quit()
+    def close(self):
+        if hasattr(self, 'driver'):
+            self.driver.quit()
 
 if __name__ == "__main__":
     user_data_path = "C:/Users/Yusaku/AppData/Local/Google/Chrome/User Data/"
     browser = Browser(user_data_path)
     browser.driver.get('https://www.google.com/')
+    time.sleep(5)
+    browser.close()

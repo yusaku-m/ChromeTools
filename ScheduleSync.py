@@ -5,14 +5,10 @@ from Chrome.Cyboze import Cyboze
 from Calender import Calender
 
 """
-when you first use selenium, you have to install driver by pip command.
-
-pip install chromedriver-binary== (your chrome version: eg. 125.0.6422.78)
-
-2025/3/27現在，以下のコマンドでインストールしたバージョンは即閉じが発生
-or you have to install chromedriver-binary-auto
-
-You can see your chrome version by 'chrome://version/'
+Selenium のドライバ管理は自動化されました。
+もし Chrome の起動に失敗する場合は、Chrome が最新バージョンであることを確認してください。
+また、実行時に Chrome のウィンドウが開いているとプロファイルの競合で失敗することがあるため、
+このスクリプトは実行時に既存の Chrome プロセスを終了させます。
 """
 print("sync start")
 
@@ -79,17 +75,16 @@ while True:
             print("No input event")
 
         """終了"""
-        cyboze.close(1)
+        cyboze.close()
 
         break
 
     except Exception as e:
-        print(e)
-        print("error is occured. meybe you have to install driver by pip command.")
-        print("pip install chromedriver-binary== (your chrome version: eg. 125.0.6422.78)")
-        print("You can see your chrome version by 'chrome://version/'")
-        print("or pip install chromedriver-binary-auto")
+        print(f"Error occurred: {e}")
+        print("Chrome の起動に失敗した可能性があります。")
+        print("1. Chrome が最新バージョンであることを確認してください。")
+        print("2. 他の Chrome ウィンドウをすべて閉じてから再試行してください。")
         
-        input("If you want to continue, press any key. If you want to stop, press Ctrl + C")
+        input("再試行するには何かキーを押してください。終了するには Ctrl + C を押してください。")
 
 input("finish sync. press enter to close this window.")

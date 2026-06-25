@@ -1,22 +1,34 @@
 from Chrome.Browser import Browser
 from selenium.webdriver.common.by import By
+import os
+import pandas as pd
+import shutil
+import datetime
+from selenium.webdriver.support.select import Select
 
 class Cyboze(Browser):
     def login(self):
+        print("Logging into Cybozu...")
         self.driver.get('https://cybozu.da.kagawa-nct.ac.jp/scripts/cbag/ag.exe?')
-
-        import os
-        import pandas as pd
 
         self.open_status()
         name = self.status.at['氏名', 'value']
         dep =  self.status.at['学科', 'value']
-        self.driver.find_element(By.LINK_TEXT, "切り替える").click()
-        from selenium.webdriver.support.select import Select
-        Select(self.driver.find_element(By.NAME, 'Group')).select_by_visible_text(dep)
-        self.driver.find_element(By.NAME, "Submit").click()
-        Select(self.driver.find_element(By.NAME, '_ID')).select_by_visible_text(name)
-        self.driver.find_element(By.NAME, "Submit").click()
+        
+        try:
+            # 「切り替える」リンクがあるか確認
+            links = self.driver.find_elements(By.LINK_TEXT, "切り替える")
+            if links:
+                links[0].click()
+                Select(self.driver.find_element(By.NAME, 'Group')).select_by_visible_text(dep)
+                self.driver.find_element(By.NAME, "Submit").click()
+                Select(self.driver.find_element(By.NAME, '_ID')).select_by_visible_text(name)
+                self.driver.find_element(By.NAME, "Submit").click()
+                print(f"Logged in as {name}.")
+            else:
+                print("Skip login steps or already at user selection page.")
+        except Exception as e:
+            print(f"Login process might have failed or skipped: {e}")
 
     def set_id(self, name, uid, department, gid):
         self.open_status()
@@ -30,10 +42,10 @@ class Cyboze(Browser):
         self.driver.get('https://cybozu.da.kagawa-nct.ac.jp/scripts/cbag/ag.exe?page=AGIndex')
 
         try:
-            self.driver.find_element_by_name("PIn").click()
+            self.driver.find_element(By.NAME, "PIn").click()
         except:
             pass
-        element = self.driver.find_element_by_css_selector(".borderTable.vr_portletBd2")
+        element = self.driver.find_element(By.CSS_SELECTOR, ".borderTable.vr_portletBd2")
         if '出社' in element.text:
             begintime = element.text.split('出社\n')[1].split(' ')[0]
             print('本日は' + begintime + 'に出勤')
@@ -44,10 +56,10 @@ class Cyboze(Browser):
         driver = self.driver
         driver.get('https://cybozu.da.kagawa-nct.ac.jp/scripts/cbag/ag.exe?page=AGIndex')
         try:
-            driver.find_element_by_name("POut").click()
+            driver.find_element(By.NAME, "POut").click()
         except:
             pass
-        element = driver.find_element_by_css_selector(".borderTable.vr_portletBd2")
+        element = driver.find_element(By.CSS_SELECTOR, ".borderTable.vr_portletBd2")
         if '退社' in element.text:
             finishtime = element.text.split('退社\n')[1].split(' ')[0]
             print('本日は' + finishtime + 'に退勤')
@@ -56,31 +68,41 @@ class Cyboze(Browser):
             print('退勤時間の取得に失敗')
 
     def get_calender(self):
+        print("Exporting Cybozu schedule...")
         driver = self.driver
         driver.get('https://cybozu.da.kagawa-nct.ac.jp/scripts/cbag/ag.exe?page=PersonalScheduleExport')
-        #現在の西暦を取得
-        import datetime
-        ThisYear = datetime.date.today().year
-        ThisMonth = datetime.date.today().month
-        #今月から1年後までを選択
-        from selenium.webdriver.support.select import Select
-        #古いカレンダーを削除したいときに検索範囲に含める
-        #Select(driver.find_element_by_name('SetDate.Year')).select_by_visible_text('1997年')
-        #Select(driver.find_element_by_name('SetDate.Month')).select_by_visible_text('1月')
-        #10年後までを選択
+        
+        # 10年後までを選択
         select = Select(driver.find_element(By.NAME, 'EndDate.Year'))
-        selectLen = len(select.options)
-        select.select_by_index(selectLen-1)
+        select.select_by_index(len(select.options)-1)
+        
+        ThisMonth = datetime.date.today().month
         Select(driver.find_element(By.NAME, 'EndDate.Month')).select_by_visible_text(str(ThisMonth + 1) + '月')
-        #ダウンロード
+        
+        # ダウンロード
+        print("Clicking export button...")
         driver.find_element(By.NAME, "Export").click()
         self.wait_download()
 
-        #ファイルの削除
-        import shutil
-        import os
-        self.calenderpath = os.getcwd() + './data/CybozeSchedule.csv'
-        shutil.move('./data/schedule.csv', self.calenderpath)   
+        # ファイルの移動
+        dest_path = os.path.join(os.getcwd(), 'data', 'CybozeSchedule.csv')
+        src_path = os.path.join(os.getcwd(), 'data', 'schedule.csv')
+        
+        if os.path.exists(src_path):
+            if os.path.exists(dest_path):
+                os.remove(dest_path)
+            shutil.move(src_path, dest_path)
+            print(f"Cybozu schedule exported to {dest_path}")
+        else:
+            # ブラウザのデフォルトダウンロード先も確認
+            home_download = os.path.join(os.path.expanduser('~'), 'Downloads', 'schedule.csv')
+            if os.path.exists(home_download):
+                if os.path.exists(dest_path):
+                    os.remove(dest_path)
+                shutil.move(home_download, dest_path)
+                print(f"Cybozu schedule found in Downloads and moved to {dest_path}")
+            else:
+                print(f"Error: schedule.csv not found in {src_path} or {home_download}")
 
     def input_schedule(self, calender):
         from tqdm import tqdm
