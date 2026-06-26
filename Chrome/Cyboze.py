@@ -77,7 +77,8 @@ class Cyboze(Browser):
         select.select_by_index(len(select.options)-1)
         
         ThisMonth = datetime.date.today().month
-        Select(driver.find_element(By.NAME, 'EndDate.Month')).select_by_visible_text(str(ThisMonth + 1) + '月')
+        NextMonth = ThisMonth % 12 + 1  # 12月→1月になるのを防ぐ
+        Select(driver.find_element(By.NAME, 'EndDate.Month')).select_by_visible_text(str(NextMonth) + '月')
         
         # ダウンロード
         print("Clicking export button...")

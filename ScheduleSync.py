@@ -24,13 +24,11 @@ while True:
         chrome.get_calender()
         chrome.close()
 
-        #指定カレンダーの結合
-
-        calender_list = [
-            'Lab_maedalab17@gmail.com.ics',
-            "Work_jagaimo13@gmail.com.ics",
-            "Office_Hour_277ef437beac7b8e071b76be72a8d55738862bf290b78395133241b387847800@group.calendar.google.com.ics",
-            ]
+        # 展開されたICSファイルをすべて自動検出して結合
+        import os
+        gcal_dir = './data/GoogleCalender'
+        calender_list = sorted([f for f in os.listdir(gcal_dir) if f.endswith('.ics')])
+        print(f"Found {len(calender_list)} calendars: {calender_list}")
 
         gcal = []
         for calender in calender_list:
@@ -39,14 +37,13 @@ while True:
                 gcal = buf
             else:
                 gcal = buf.union(gcal)
-            
             print(calender)
-            #print(gcal.view())
 
         """サイボウズカレンダーに自動入力された予定の取得"""
         user_data_path = "C:/Users/Yusaku/AppData/Local/Google/Chrome/AutoSyncData/"
         cyboze = Cyboze(user_data_path)
         cyboze.set_id(name='前田　祐作',uid='5791',department='機械工学科',gid='2100')
+        cyboze.login()
         cyboze.get_calender()
 
         ccal = Calender.CybozeCalender('ccal','./data/CybozeSchedule.csv')

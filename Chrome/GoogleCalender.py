@@ -6,6 +6,15 @@ class GoogleCalender(Browser):
     def get_calender(self):
         import time, zipfile, glob
         EXPORT_URL = 'https://calendar.google.com/calendar/u/0/exporticalzip'
+        id_val = self.status.at['googleID', 'value']
+        download_dir = os.path.join(os.getcwd(), "data")
+        zip_pattern = os.path.join(download_dir, f"{id_val}@gmail.com.ical*.zip")
+
+        # 古いicalzipを削除（コピー番号付きも含む）
+        for old in glob.glob(zip_pattern):
+            os.remove(old)
+            print(f"  Removed old zip: {os.path.basename(old)}")
+
         print("Accessing Google Calendar export URL...")
         self.driver.get(EXPORT_URL)
         time.sleep(3)
@@ -13,22 +22,21 @@ class GoogleCalender(Browser):
         current = self.driver.current_url
         print(f"  Current URL: {current}")
 
-        # ログインが必要かどうかを判定（calendar.google.com 以外にいる場合、またはダウンロードが始まらない場合）
-        needs_login = ('calendar.google.com' not in current) or ('accounts.google.com' in current)
-        if not needs_login:
-            # ダウンロードが3秒以内に始まらなければログインが必要と判断
-            time.sleep(3)
-            needs_login = not bool(glob.glob('./data/*.crdownload') or glob.glob('./data/*.ical.zip'))
+        # chrome:// = ダウンロード開始済み（ログイン済み）
+        # accounts.google.com や calendar 以外 = ログインが必要
+        download_started = current.startswith('chrome://')
+        is_login_page = (not download_started) and (
+            'accounts.google.com' in current or 'calendar.google.com' not in current
+        )
 
-        if needs_login:
+        if is_login_page:
             print("\n【Googleログインが必要です】")
-            print("Chromeウィンドウで jagaimo13@gmail.com にログインしてください。")
+            print(f"Chromeウィンドウで {id_val}@gmail.com にログインしてください。")
             print("ログイン完了後、自動的にエクスポートが始まります（最大5分待機）...")
             deadline = time.time() + 300
             while time.time() < deadline:
                 time.sleep(2)
                 url = self.driver.current_url
-                # ログイン完了してカレンダーに戻ったら再エクスポート
                 if 'calendar.google.com' in url and 'accounts.google.com' not in url:
                     print("ログイン確認。エクスポートを再実行します...")
                     time.sleep(2)
@@ -39,20 +47,19 @@ class GoogleCalender(Browser):
 
         self.wait_download()
 
-        id = self.status.at['googleID', 'value']
-        zip_path = os.path.join("./data", f"{id}@gmail.com.ical.zip")
-        extract_path = os.path.join("./data", "GoogleCalender")
+        # コピー番号付きのファイルも含めて最新のzipを探す
+        zip_files = sorted(glob.glob(zip_pattern), key=os.path.getmtime, reverse=True)
+        if not zip_files:
+            raise FileNotFoundError(f"Google Calendar export zip not found. (pattern: {zip_pattern})")
 
-        print(f"Extracting {zip_path} to {extract_path}...")
+        zip_path = zip_files[0]
+        extract_path = os.path.join(download_dir, "GoogleCalender")
+        print(f"Extracting {os.path.basename(zip_path)} to {extract_path}...")
 
-        if os.path.exists(zip_path):
-            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                zip_ref.extractall(extract_path)
-            os.remove(zip_path)
-            print("Google Calendar export successful.")
-        else:
-            print(f"Error: {zip_path} not found. Download might have failed.")
-            raise FileNotFoundError(f"Google Calendar export zip not found: {zip_path}")
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(extract_path)
+        os.remove(zip_path)
+        print("Google Calendar export successful.")
         
     def set_id(self, id):
         self.open_status()

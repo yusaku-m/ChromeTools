@@ -124,29 +124,26 @@ class Browser:
         wait = WebDriverWait(self.driver, 20)
         wait.until(EC.presence_of_element_located(element))
 
-    def wait_download(self, timeout=60):
+    def wait_download(self, timeout_start=15):
         import glob
         download_dir = os.path.join(os.getcwd(), "data")
-        print(f'Waiting for download to start in {download_dir}...')
 
-        # ダウンロード開始（.crdownloadファイル出現）を最大timeout秒待つ
-        deadline = time.time() + timeout
+        # まずダウンロード開始（.crdownload出現）を最大timeout_start秒待つ
+        # ダウンロードが既に始まっている・または高速完了した場合は即抜け
+        deadline = time.time() + timeout_start
         while time.time() < deadline:
-            time.sleep(1)
             if glob.glob(os.path.join(download_dir, "*.crdownload")):
-                print('Download started.')
                 break
+            time.sleep(0.5)
         else:
-            # .crdownloadが現れなかった場合、すでに完了しているか失敗
-            print('Download completed immediately (or not started).')
+            print('Download appears to have completed already (no .crdownload found).')
             return
 
-        # ダウンロード完了（.crdownloadファイル消滅）を待つ
-        while True:
-            if not glob.glob(os.path.join(download_dir, "*.crdownload")):
-                print('Download finished.')
-                break
-            time.sleep(1)
+        # .crdownloadが消えるまで待つ（完了）
+        print('Download in progress...')
+        while glob.glob(os.path.join(download_dir, "*.crdownload")):
+            time.sleep(0.5)
+        print('Download finished.')
 
     def close(self):
         if hasattr(self, 'driver'):
