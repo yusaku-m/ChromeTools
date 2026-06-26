@@ -19,7 +19,7 @@ class Calender():
 
     def substract(self, calender, new_name = 'substract'):
         """入力カレンダーとの重複予定を削除"""
-        events = self.events
+        events = list(self.events)  # コピーして元リストを破壊しない
         for eventB in calender.events:
             events = [eventA for eventA in events if not eventA.match(eventB)]
         return Calender(new_name, events)

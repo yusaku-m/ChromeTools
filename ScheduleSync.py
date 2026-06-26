@@ -16,7 +16,9 @@ while True:
     try:
 
         """グーグルカレンダーの取得"""
-        user_data_path = "C:/Users/Yusaku/AppData/Local/Google/Chrome/User Data/"
+        # 自動化専用プロファイル（メインChromeを閉じなくてよい）
+        # 初回のみ別ウィンドウでGoogleにログインが必要
+        user_data_path = "C:/Users/Yusaku/AppData/Local/Google/Chrome/AutoSyncData/"
         chrome = GoogleCalender(user_data_path)
         chrome.set_id('jagaimo13')
         chrome.get_calender()
@@ -42,7 +44,7 @@ while True:
             #print(gcal.view())
 
         """サイボウズカレンダーに自動入力された予定の取得"""
-        user_data_path = "C:/Users/Yusaku/AppData/Local/Google/Chrome/User Data/"
+        user_data_path = "C:/Users/Yusaku/AppData/Local/Google/Chrome/AutoSyncData/"
         cyboze = Cyboze(user_data_path)
         cyboze.set_id(name='前田　祐作',uid='5791',department='機械工学科',gid='2100')
         cyboze.get_calender()
