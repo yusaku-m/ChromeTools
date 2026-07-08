@@ -9,7 +9,8 @@ from selenium.webdriver.support.select import Select
 class Cyboze(Browser):
     def login(self):
         print("Logging into Cybozu...")
-        self.driver.get('https://cybozu.da.kagawa-nct.ac.jp/scripts/cbag/ag.exe?')
+        login_url = 'https://cybozu.da.kagawa-nct.ac.jp/scripts/cbag/ag.exe?'
+        self.patient_get(login_url, description="Cybozuログイン(PIN入力)")
 
         self.open_status()
         name = self.status.at['氏名', 'value']

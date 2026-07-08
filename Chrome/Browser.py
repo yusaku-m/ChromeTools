@@ -124,6 +124,43 @@ class Browser:
         wait = WebDriverWait(self.driver, 20)
         wait.until(EC.presence_of_element_located(element))
 
+    def wait_for_manual_step(self, ready_check, description="操作", poll_interval=5, status_interval=60, timeout_hours=None):
+        """OSダイアログ(Windows Hello等)の手動入力待ちなど、時間の読めない待機に使う。
+        ready_check() が True を返すまでポーリングし続ける。"""
+        start = time.time()
+        last_status = start
+        while True:
+            try:
+                if ready_check():
+                    break
+            except Exception:
+                pass
+            now = time.time()
+            if now - last_status >= status_interval:
+                print(f"{description}の完了をお待ちしています…(経過 {int((now - start) / 60)}分)")
+                last_status = now
+            if timeout_hours is not None and now - start > timeout_hours * 3600:
+                raise TimeoutError(f"{description}が{timeout_hours}時間以内に完了しませんでした。")
+            time.sleep(poll_interval)
+
+    def patient_get(self, url, description="ページの読み込み"):
+        """driver.get()がpage_load_timeoutで例外を出しても諦めず、
+        実際にページが準備できるまで待つ。Windows HelloのPINダイアログ等で
+        ナビゲーションがブロックされるケースに対応するため。"""
+        from selenium.common.exceptions import TimeoutException
+        try:
+            self.driver.get(url)
+        except TimeoutException:
+            print(f"{description}が既定時間内に終わりませんでした。手動操作(PIN入力等)待ちの可能性があります。")
+
+        domain = url.split('/')[2] if '//' in url else url
+
+        def _ready():
+            state = self.driver.execute_script('return document.readyState')
+            return state == 'complete' and domain in self.driver.current_url
+
+        self.wait_for_manual_step(_ready, description=description)
+
     def wait_download(self, timeout_start=15):
         import glob
         download_dir = os.path.join(os.getcwd(), "data")
