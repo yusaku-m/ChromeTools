@@ -101,10 +101,13 @@ while True:
         gcal_other_filter = gcal_other.filtering_by_date(start, end)
         input_events = gcal_other_filter.substract(ccal_filter, 'input')
 
-        # 音楽練習室は同期範囲を無制限(過去〜未来全て)にする。ccalを通常ウィンドウで
-        # 絞り込むと範囲外に既に入力済みの予定を見落として二重入力してしまうため、
-        # フィルタしていない全件のccalと突き合わせる
-        music_room_input = gcal_music_room.substract(ccal, 'music_room_input')
+        # 音楽練習室は同期範囲を2025年4月1日以降(未来は無制限)にする。ccalを通常
+        # ウィンドウで絞り込むと範囲外に既に入力済みの予定を見落として二重入力
+        # してしまうため、フィルタしていない全件のccalと突き合わせる
+        music_room_start = datetime(2025, 4, 1)
+        music_room_end = now + timedelta(days=365 * 100)  # 実質無制限
+        gcal_music_room_filter = gcal_music_room.filtering_by_date(music_room_start, music_room_end)
+        music_room_input = gcal_music_room_filter.substract(ccal, 'music_room_input')
         input_events = input_events.union(music_room_input, 'input')
 
         if len(input_events.events) > 0:

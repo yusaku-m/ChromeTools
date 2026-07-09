@@ -5,6 +5,14 @@ import time
 import psutil
 from selenium import webdriver
 
+
+class DatabaseBusyError(Exception):
+    """サイボウズがエラー番号102(「データベースにアクセスが集中しています。
+    しばらく経ってから再度アクセスしてください。」)を返し続け、リトライ上限に
+    達したときに送出する。"""
+    pass
+
+
 class Browser:
     """ブラウザ操作クラス"""
     def __init__(self, userdata_path):
@@ -123,6 +131,13 @@ class Browser:
         from selenium.webdriver.support.wait import WebDriverWait
         wait = WebDriverWait(self.driver, 20)
         wait.until(EC.presence_of_element_located(element))
+
+    def is_database_busy(self):
+        """サイボウズのフォーム登録直後に表示されるエラーページ(エラー番号102:
+        「データベースにアクセスが集中しています。しばらく経ってから再度アクセス
+        してください。」)が出ていないか確認する。ネイティブalert()ではなく通常の
+        HTMLページとして返ってくるため、page_sourceの文字列で判定する。"""
+        return 'データベースにアクセスが集中しています' in self.driver.page_source
 
     def safe_click(self, element_or_locator, timeout=10):
         """通常のclick()がElementNotInteractableException/ElementClickInterceptedExceptionを

@@ -77,15 +77,32 @@ class Cyboze(Browser):
         # ことがあったため(PIN未入力の状態で再現済み)。
         self.patient_get('https://cybozu.da.kagawa-nct.ac.jp/scripts/cbag/ag.exe?page=PersonalScheduleExport', description="Cybozu予定エクスポート画面(PIN入力待ちの可能性)", wait_for=(By.NAME, 'EndDate.Year'))
 
-        # 開始日を選べるだけ過去にする(音楽練習室カレンダーは同期範囲を無制限にするため、
-        # 過去に自動入力済みの予定もccal側で照合できるようにしたい。フォームにフィールドが
-        # 無い/名前が違う場合は何もしない)
+        # 開始日を音楽練習室カレンダーの同期起点(2025年4月1日、ScheduleSync.pyの
+        # music_room_startと合わせている)より少し前にする。過去に自動入力済みの
+        # 音楽練習室の予定もccal側で照合できるようにしたい。
+        # 実際のフィールド名は「StartDate.Year/Month」ではなく「SetDate.Year/Month/Day」
+        # だったことをログ出力で確認済み(EndDate.*とは対称的な名前になっていない)。
+        # 選べる最古年(index 0 = 1997年)まで遡ると範囲が36年分にもなり、Export
+        # クリック後にChromeDriverのコマンド応答自体がタイムアウトする(観測済み:
+        # urllib3.exceptions.ReadTimeoutError, read timeout=120)ほど重くなったため、
+        # 必要な2025年分だけを選ぶ。年の表示テキスト書式は未確認のため、選択肢を
+        # 順に見て"2025"を含むものを探す(見つからなければ従来通り最古年にフォールバック)。
         try:
-            start_year_select = Select(driver.find_element(By.NAME, 'StartDate.Year'))
-            start_year_select.select_by_index(0)
-            Select(driver.find_element(By.NAME, 'StartDate.Month')).select_by_visible_text('1月')
-        except Exception:
-            pass
+            start_year_select = Select(driver.find_element(By.NAME, 'SetDate.Year'))
+            year_option = next((o for o in start_year_select.options if '2025' in o.text), None)
+            if year_option is not None:
+                start_year_select.select_by_visible_text(year_option.text)
+            else:
+                start_year_select.select_by_index(0)
+            Select(driver.find_element(By.NAME, 'SetDate.Month')).select_by_visible_text('1月')
+            print(f"開始日を選択: {start_year_select.first_selected_option.text}年1月")
+        except Exception as e:
+            print(f"警告: 開始日(SetDate.Year/Month)の選択に失敗しました。エクスポート範囲の開始日がデフォルトのままかもしれません: {e}")
+            try:
+                select_names = [s.get_attribute('name') for s in driver.find_elements(By.TAG_NAME, 'select')]
+                print(f"フォーム上のselect要素名一覧: {select_names}")
+            except Exception:
+                pass
 
         # 10年後までを選択
         select = Select(driver.find_element(By.NAME, 'EndDate.Year'))

@@ -3,6 +3,8 @@ from selenium.webdriver.support.select import Select
 
 from selenium.webdriver.common.by import By
 
+from Chrome.Browser import DatabaseBusyError
+
 class Event():
     """予定単体のクラス"""
     def __init__(self, title, st, et, id, participants=None, facilities=None):
@@ -65,9 +67,55 @@ class Event():
                 fid, name
             )
 
+    def _submit_schedule_entry(self, browser, target_url, set_time, max_retries=10, retry_wait=30):
+        """ScheduleEntryフォームへの入力〜登録を行う共通処理。
+        登録(Entry)押下直後にサイボウズがエラー番号102(「データベースにアクセスが
+        集中しています。しばらく経ってから再度アクセスしてください。」)を返すことが
+        あるため、その場合はretry_wait秒待ってフォーム読み込みからやり直す。
+        ネイティブalert()ではなく通常ページとして返るためbrowser.is_database_busy()で
+        page_sourceを見て判定する(browser.wait_elementのTimeoutExceptionには頼らない
+        ―"Submit"要素が無いだけの別要因と区別できないため)。"""
+        driver = browser.driver
+
+        for attempt in range(max_retries + 1):
+            while True:
+                try:
+                    driver.get(target_url)
+                    if set_time:
+                        Select(driver.find_element(By.NAME, 'SetTime.Hour')).select_by_visible_text(str(self.start_time.hour) + '時')
+                        Select(driver.find_element(By.NAME, 'SetTime.Minute')).select_by_visible_text(str(self.start_time.minute).zfill(2) + '分')
+                        Select(driver.find_element(By.NAME, 'EndTime.Hour')).select_by_visible_text(str(self.end_time.hour) + '時')
+                        Select(driver.find_element(By.NAME, 'EndTime.Minute')).select_by_visible_text(str(self.end_time.minute).zfill(2) + '分')
+                    else:
+                        driver.find_element(By.NAME, 'Detail')
+                    break
+
+                except:
+                    print("Wait for loading page")
+                    pass
+
+            driver.find_element(By.NAME, 'Detail').send_keys(self.title)#予定名
+            driver.find_element(By.NAME, 'Memo').send_keys(self.id)#uid含む全情報
+            self._add_participants(driver)
+            self._add_facilities(driver)
+            driver.find_element(By.NAME, "Entry").click()
+
+            if browser.is_database_busy():
+                if attempt >= max_retries:
+                    break
+                print(f"サイボウズがデータベース混雑(エラー番号102)を返しました。{retry_wait}秒待って再試行します。({attempt + 1}/{max_retries})")
+                import time
+                time.sleep(retry_wait)
+                continue
+
+            #入力完了まで待機
+            browser.wait_element((By.NAME, "Submit"))
+            return
+
+        raise DatabaseBusyError(f"'{self.title}'の登録が{max_retries}回リトライしてもサイボウズのデータベース混雑エラー(102)から回復しませんでした。")
+
     def input_cyboze(self, browser):
         """サイボウズへの入力"""
-        driver = browser.driver
         status = browser.status
         uid = status.at['CybozeUID', 'value']
         gid = status.at['CybozeGID', 'value']
@@ -75,27 +123,7 @@ class Event():
         date = f'{self.start_time.year}.{self.start_time.month}.{self.start_time.day}'
         terget_url = f'https://cybozu.da.kagawa-nct.ac.jp/scripts/cbag/ag.exe?page=ScheduleEntry&UID={uid}&GID={gid}&Date=da.{date}&cp=sg'
 
-        while True:
-            try:
-                driver.get(terget_url)
-                Select(driver.find_element(By.NAME, 'SetTime.Hour')).select_by_visible_text(str(self.start_time.hour) + '時')
-                Select(driver.find_element(By.NAME, 'SetTime.Minute')).select_by_visible_text(str(self.start_time.minute).zfill(2) + '分')
-                Select(driver.find_element(By.NAME, 'EndTime.Hour')).select_by_visible_text(str(self.end_time.hour) + '時')
-                Select(driver.find_element(By.NAME, 'EndTime.Minute')).select_by_visible_text(str(self.end_time.minute).zfill(2) + '分')
-                break
-
-            except:
-                print("Wait for loading page")
-                pass
-
-
-        driver.find_element(By.NAME, 'Detail').send_keys(self.title)#予定名
-        driver.find_element(By.NAME, 'Memo').send_keys(self.id)#uid含む全情報
-        self._add_participants(driver)
-        self._add_facilities(driver)
-        driver.find_element(By.NAME, "Entry").click()
-        #入力完了まで待機
-        browser.wait_element((By.NAME, "Submit"))
+        self._submit_schedule_entry(browser, terget_url, set_time=True)
 
 
     def delete_cyboze(self, browser,monitor = False):
@@ -127,7 +155,15 @@ class Event():
         driver.find_element(By.NAME, "Submit").click()
         #削除
         #参加者・施設が複数ある予定はリンクテキスト末尾に"+"が付くため部分一致で検索する
-        browser.safe_click((By.PARTIAL_LINK_TEXT, self.title))
+        #検索結果に見つからない(既に手動削除された等)場合、safe_clickはTimeoutExceptionを
+        #投げる。1件見つからないだけで同期全体を止めないよう、警告を出してこのイベントの
+        #削除だけスキップする
+        from selenium.common.exceptions import TimeoutException
+        try:
+            browser.safe_click((By.PARTIAL_LINK_TEXT, self.title))
+        except TimeoutException:
+            print(f"警告: 削除対象「{self.title}」({self.start_time}~{self.end_time})がサイボウズの検索結果に見つからないためスキップします。")
+            return
         browser.safe_click((By.LINK_TEXT, '削除する'))
         #参加者が2名以上いる予定は「全参加者の予定を削除する/自分の予定だけ削除する」の
         #選択が必須(未選択のままYesを押すと"条件を選択してください。"のalertで弾かれる)
@@ -149,7 +185,6 @@ class Event():
 class AllDay(Event):
     """終日予定"""
     def input_cyboze(self, browser):
-        driver = browser.driver
         status = browser.status
         uid = status.at['CybozeUID', 'value']
         gid = status.at['CybozeGID', 'value']
@@ -157,23 +192,7 @@ class AllDay(Event):
         date = f'{self.start_time.year}.{self.start_time.month}.{self.start_time.day}'
         terget_url = f'https://cybozu.da.kagawa-nct.ac.jp/scripts/cbag/ag.exe?page=ScheduleEntry&UID={uid}&GID={gid}&Date=da.' + date + '&cp=sg'
 
-        while True:
-            try:
-                driver.get(terget_url)
-                detail_field = driver.find_element(By.NAME, 'Detail')
-                break
-
-            except:
-                print("Wait for loading page")
-                pass
-
-        detail_field.send_keys(self.title)#予定名
-        driver.find_element(By.NAME, 'Memo').send_keys(self.id)#uid含む全情報
-        self._add_participants(driver)
-        self._add_facilities(driver)
-        driver.find_element(By.NAME, "Entry").click()
-
-        browser.wait_element((By.NAME, "Submit"))
+        self._submit_schedule_entry(browser, terget_url, set_time=False)
 
 class MultiDay(Event):
     """複数日予定"""
