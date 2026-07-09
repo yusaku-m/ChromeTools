@@ -71,8 +71,22 @@ class Cyboze(Browser):
     def get_calender(self):
         print("Exporting Cybozu schedule...")
         driver = self.driver
-        driver.get('https://cybozu.da.kagawa-nct.ac.jp/scripts/cbag/ag.exe?page=PersonalScheduleExport')
-        
+        # wait_forでEndDate.Yearの実在を確認するまで待つ。domain+readyStateだけの
+        # 判定だとWindows HelloのPIN入力待ちで前ページのままなのに「準備完了」と
+        # 誤判定してしまい、この直後のfind_elementがNoSuchElementExceptionになる
+        # ことがあったため(PIN未入力の状態で再現済み)。
+        self.patient_get('https://cybozu.da.kagawa-nct.ac.jp/scripts/cbag/ag.exe?page=PersonalScheduleExport', description="Cybozu予定エクスポート画面(PIN入力待ちの可能性)", wait_for=(By.NAME, 'EndDate.Year'))
+
+        # 開始日を選べるだけ過去にする(音楽練習室カレンダーは同期範囲を無制限にするため、
+        # 過去に自動入力済みの予定もccal側で照合できるようにしたい。フォームにフィールドが
+        # 無い/名前が違う場合は何もしない)
+        try:
+            start_year_select = Select(driver.find_element(By.NAME, 'StartDate.Year'))
+            start_year_select.select_by_index(0)
+            Select(driver.find_element(By.NAME, 'StartDate.Month')).select_by_visible_text('1月')
+        except Exception:
+            pass
+
         # 10年後までを選択
         select = Select(driver.find_element(By.NAME, 'EndDate.Year'))
         select.select_by_index(len(select.options)-1)

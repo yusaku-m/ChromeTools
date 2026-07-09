@@ -65,3 +65,54 @@ class GoogleCalender(Browser):
         self.open_status()
         self.set_status('googleID', id)
         self.save_status()
+
+    def add_extra_calendar(self, key, secret_ics_url, display_name=None):
+        """`/exporticalzip`（全カレンダー一括エクスポート）に含まれないカレンダーを登録する。
+
+        オーナーではなく「共有」で編集権限を得ているだけのカレンダー（他アカウント所有の
+        カレンダーなど）は、権限の有無に関わらず一括エクスポートの対象から漏れることがある。
+        該当カレンダーの設定画面 > 「カレンダーの統合」 > 「非公開アドレス（iCal形式）」の
+        URLをここに登録しておくと、get_extra_calendars() で個別に取得できるようになる。
+
+        key: 'extra_calendar_<key>_url' として status.binaryfile に保存する識別子（英数字推奨）
+        """
+        self.open_status()
+        self.set_status(f'extra_calendar_{key}_name', display_name or key)
+        self.set_status(f'extra_calendar_{key}_url', secret_ics_url)
+        self.save_status()
+
+    def get_extra_calendars(self):
+        """add_extra_calendar() で登録済みのカレンダーを、非公開iCalアドレス経由で個別取得する。"""
+        import glob
+
+        download_dir = os.path.join(os.getcwd(), "data")
+        extract_path = os.path.join(download_dir, "GoogleCalender")
+        os.makedirs(extract_path, exist_ok=True)
+
+        url_keys = [k for k in self.status.index if str(k).startswith('extra_calendar_') and str(k).endswith('_url')]
+        for url_key in url_keys:
+            key = url_key[len('extra_calendar_'):-len('_url')]
+            name_key = f'extra_calendar_{key}_name'
+            display_name = self.status.at[name_key, 'value'] if name_key in self.status.index else key
+            url = self.status.at[url_key, 'value']
+
+            print(f"Fetching extra calendar: {display_name}")
+            before = set(os.listdir(download_dir))
+            self.driver.get(url)
+            self.wait_download()
+            new_files = set(os.listdir(download_dir)) - before
+            new_files = {f for f in new_files if not f.endswith('.crdownload')}
+
+            if not new_files:
+                candidates = sorted(glob.glob(os.path.join(download_dir, "*.ics")), key=os.path.getmtime, reverse=True)
+                if not candidates:
+                    print(f"  Warning: {display_name} のダウンロードファイルが見つかりませんでした。")
+                    continue
+                new_files = {os.path.basename(candidates[0])}
+
+            src = os.path.join(download_dir, next(iter(new_files)))
+            dst = os.path.join(extract_path, f"{key}.ics")
+            if os.path.exists(dst):
+                os.remove(dst)
+            os.replace(src, dst)
+            print(f"  Saved: {dst}")

@@ -102,7 +102,7 @@ class CybozeCalender(Calender):
 
 class GoogleCalender(Calender):
     """googleカレンダー予定"""
-    def __init__(self, name ='calender', source = None, unifiedeventname = None):
+    def __init__(self, name ='calender', source = None, unifiedeventname = None, extra_participants = None, extra_facilities = None, skip_allday = False, skip_titles = None):
         super().__init__(name)  
         self.name = name
         self.events = []
@@ -122,10 +122,14 @@ class GoogleCalender(Calender):
 
             #単発予定の情報を抽出
             if unifiedeventname == None:
-                name = self.extract(raw_schedule, 'SUMMARY:') 
+                name = self.extract(raw_schedule, 'SUMMARY:')
             else:
                 name = unifiedeventname
-                
+
+            #予定名で丸ごとスキップ(例:施設と重複する個人名の仮予約予定)
+            if skip_titles and name in skip_titles:
+                continue
+
             start_day   = self.extract(raw_schedule, 'DTSTART;VALUE=DATE:')
             end_day     = self.extract(raw_schedule, 'DTEND;VALUE=DATE:')
 
@@ -143,9 +147,13 @@ class GoogleCalender(Calender):
             if end_time != "":
                 edaytime = datetime.strptime(end_time, '%Y%m%dT%H%M%SZ') + timedelta(hours = 9)
 
-            end_time    = end_time = self.extract(raw_schedule, 'DTEND;TZID=Asia/Tokyo:')
-            if end_time != "":
-                edaytime = datetime.strptime(end_time, '%Y%m%dT%H%M%S')
+            end_time2   = self.extract(raw_schedule, 'DTEND;TZID=Asia/Tokyo:')
+            if end_time2 != "":
+                edaytime = datetime.strptime(end_time2, '%Y%m%dT%H%M%S')
+
+            #DTENDが存在しない予定(瞬間的な予定)は開始時刻と同じ終了時刻を仮定する
+            if end_time == "" and end_time2 == "" and start_day == "":
+                edaytime = sdaytime
 
             uid         = self.extract(raw_schedule, 'UID:')
 
@@ -162,19 +170,18 @@ class GoogleCalender(Calender):
             if repeat_rule == '':
                 #予定の追加
                 #終日予定
-                if start_day != '': 
+                if start_day != '' and not skip_allday:
                     sdaytime = datetime.strptime(start_day, '%Y%m%d')
                     edaytime = datetime.strptime(end_day, '%Y%m%d')
                     id = str([name, sdaytime, edaytime, uid])
                     delta = edaytime - sdaytime
                     for i in range(delta.days):
-                        self.events.append(Event.AllDay(name,sdaytime+timedelta(days=i),sdaytime+timedelta(days=i+1),id))
+                        self.events.append(Event.AllDay(name,sdaytime+timedelta(days=i),sdaytime+timedelta(days=i+1),id,participants=extra_participants,facilities=extra_facilities))
                 
                 #時間予定
                 if start_day == '':
-                    #edaytime = sdaytime
                     id = str([name, sdaytime, edaytime, uid])
-                    self.events.append(Event.Event(name, sdaytime, edaytime, id))
+                    self.events.append(Event.Event(name, sdaytime, edaytime, id, participants=extra_participants, facilities=extra_facilities))
 
                 #繰り返しの例外予定
                 if origin_date != '':
@@ -216,7 +223,7 @@ class GoogleCalender(Calender):
                                     ex_flag = 1
                             if ex_flag == 0:
                                 id = str([name, sdaytime, edaytime, uid])
-                                self.events.append(Event.Event(name, sdaytime, edaytime, id))
+                                self.events.append(Event.Event(name, sdaytime, edaytime, id, participants=extra_participants, facilities=extra_facilities))
                         #次の日へ
                         sdaytime += timedelta(days = 1)
                         edaytime += timedelta(days = 1)

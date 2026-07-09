@@ -124,6 +124,26 @@ class Browser:
         wait = WebDriverWait(self.driver, 20)
         wait.until(EC.presence_of_element_located(element))
 
+    def safe_click(self, element_or_locator, timeout=10):
+        """通常のclick()がElementNotInteractableException/ElementClickInterceptedExceptionを
+        投げる要素(CSSで見た目上隠されたラジオボタン等、DOM上には存在するがWebDriverの
+        通常クリックでは操作不可の要素)向けのフォールバック付きクリック。
+        element_or_locatorはWebElementまたは(By, value)のロケータタプルを受け付ける。"""
+        from selenium.webdriver.support import expected_conditions as EC
+        from selenium.webdriver.support.wait import WebDriverWait
+        from selenium.common.exceptions import ElementNotInteractableException, ElementClickInterceptedException
+        from selenium.webdriver.remote.webelement import WebElement
+
+        if isinstance(element_or_locator, WebElement):
+            element = element_or_locator
+        else:
+            element = WebDriverWait(self.driver, timeout).until(EC.presence_of_element_located(element_or_locator))
+
+        try:
+            element.click()
+        except (ElementNotInteractableException, ElementClickInterceptedException):
+            self.driver.execute_script("arguments[0].click();", element)
+
     def wait_for_manual_step(self, ready_check, description="操作", poll_interval=5, status_interval=60, timeout_hours=None):
         """OSダイアログ(Windows Hello等)の手動入力待ちなど、時間の読めない待機に使う。
         ready_check() が True を返すまでポーリングし続ける。"""
@@ -143,11 +163,17 @@ class Browser:
                 raise TimeoutError(f"{description}が{timeout_hours}時間以内に完了しませんでした。")
             time.sleep(poll_interval)
 
-    def patient_get(self, url, description="ページの読み込み"):
+    def patient_get(self, url, description="ページの読み込み", wait_for=None):
         """driver.get()がpage_load_timeoutで例外を出しても諦めず、
         実際にページが準備できるまで待つ。Windows HelloのPINダイアログ等で
-        ナビゲーションがブロックされるケースに対応するため。"""
-        from selenium.common.exceptions import TimeoutException
+        ナビゲーションがブロックされるケースに対応するため。
+
+        domain+readyStateだけの判定は、PINダイアログ待ちでdriver.get()がまだ
+        実際には遷移していない(=前のページのままURL/readyStateだけは条件を満たして
+        しまう)場合に誤って「準備完了」と判定してしまうことがある。wait_forに
+        遷移先ページ固有の要素を(By, value)で渡すと、その要素が実際に見つかる
+        までPIN入力等を待ち続ける。"""
+        from selenium.common.exceptions import TimeoutException, NoSuchElementException
         try:
             self.driver.get(url)
         except TimeoutException:
@@ -157,7 +183,20 @@ class Browser:
 
         def _ready():
             state = self.driver.execute_script('return document.readyState')
-            return state == 'complete' and domain in self.driver.current_url
+            if state != 'complete' or domain not in self.driver.current_url:
+                return False
+            if wait_for is not None:
+                try:
+                    self.driver.find_element(*wait_for)
+                except NoSuchElementException:
+                    # 再度driver.get()を試みる(PINダイアログがまだ塞いでいる場合、
+                    # 前回のget()が実際には効いていない可能性があるため)
+                    try:
+                        self.driver.get(url)
+                    except TimeoutException:
+                        pass
+                    return False
+            return True
 
         self.wait_for_manual_step(_ready, description=description)
 
