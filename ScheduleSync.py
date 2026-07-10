@@ -1,3 +1,4 @@
+import time
 from datetime import datetime, timedelta
 
 from Chrome.GoogleCalender import GoogleCalender
@@ -128,7 +129,8 @@ while True:
         print("Chrome の起動に失敗した可能性があります。")
         print("1. Chrome が最新バージョンであることを確認してください。")
         print("2. 他の Chrome ウィンドウをすべて閉じてから再試行してください。")
-        
-        input("再試行するには何かキーを押してください。終了するには Ctrl + C を押してください。")
+        print("5秒後に自動的に再試行します。終了するには Ctrl + C を押してください。")
+
+        time.sleep(5)
 
 input("finish sync. press enter to close this window.")

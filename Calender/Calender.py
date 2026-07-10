@@ -94,7 +94,7 @@ class CybozeCalender(Calender):
                 start_time = datetime.strptime(f'{row["開始日付"]} {row["開始時刻"]}', "%Y/%m/%d %H:%M:%S")
                 end_time = datetime.strptime(f'{row["終了日付"]} {row["終了時刻"]}', "%Y/%m/%d %H:%M:%S")
             if not pd.isnull(row["メモ"]): #nanエラー会費
-                if 'datetime.datetime(' in row["メモ"]: #他の方が入力した予定はカウントしない 
+                if 'datetime.datetime(' in row["メモ"]: #他の方が入力した予定はカウントしない
                     self.events.append(Event.Event(row["予定詳細"], start_time, end_time, row["メモ"]))
         #読み込み完了後，sourceを削除
         import os

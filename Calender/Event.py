@@ -21,10 +21,15 @@ class Event():
             print(f'{self.id}')
 
     def match(self, event):
-        if self.title == event.title and self.start_time == event.start_time and self.end_time == event.end_time and self.id == event.id:
-            return True
-        else:
-            return False
+        """title・start_time・end_timeの一致のみで同一予定と判定する。
+        以前はidの完全一致(uidを含む)も条件にしていたが、Google側で予定が
+        削除・再作成される(タイトル・時刻はそのまま新しいUIDが振られる)ケースが
+        実際に確認された(音楽練習室カレンダーの「個人練習(他の部員も参加可)」等)。
+        idまで一致を要求すると、既にサイボウズに入力済みでも「未入力」と誤判定して
+        再入力を試み、施設予約なら二重予約エラーで停止・リトライを繰り返し、
+        施設予約でなければ気付かれないままサイボウズ側に重複行が増え続けていた
+        (実データ確認済み: 同一タイトル・同一時刻の重複行が複数件見つかった)。"""
+        return self.title == event.title and self.start_time == event.start_time and self.end_time == event.end_time
 
     def _add_participants(self, driver):
         """参加者(sUID)セレクトに追加の参加者を差し込む。

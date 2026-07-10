@@ -137,12 +137,32 @@ class Cyboze(Browser):
             else:
                 print(f"Error: schedule.csv not found in {src_path} or {home_download}")
 
+    def _dismiss_lingering_alert(self):
+        """施設/参加者の二重予約等でネイティブalert()が残ったままだと、以降の
+        全操作がUnexpectedAlertPresentExceptionになってしまうため、次のイベントの
+        処理に移る前に開いていれば閉じておく。"""
+        from selenium.common.exceptions import NoAlertPresentException
+        try:
+            self.driver.switch_to.alert.accept()
+        except NoAlertPresentException:
+            pass
+
     def input_schedule(self, calender):
         from tqdm import tqdm
         for event in tqdm(calender.events, desc='予定入力中'):
-            event.input_cyboze(self)
+            try:
+                event.input_cyboze(self)
+            except Exception as e:
+                print(f"警告: 「{event.title}」({event.start_time}~{event.end_time})の入力に失敗したためスキップします: {e}")
+                print(f"  id={event.id}")
+                self._dismiss_lingering_alert()
 
     def delete_schedule(self, calender):
         from tqdm import tqdm
         for event in tqdm(calender.events, desc='予定削除中'):
-            event.delete_cyboze(self)
+            try:
+                event.delete_cyboze(self)
+            except Exception as e:
+                print(f"警告: 「{event.title}」({event.start_time}~{event.end_time})の削除に失敗したためスキップします: {e}")
+                print(f"  id={event.id}")
+                self._dismiss_lingering_alert()
