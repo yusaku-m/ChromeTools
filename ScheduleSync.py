@@ -19,6 +19,10 @@ MUSIC_ROOM_EXTRA_FACILITIES = [
 # (個人の仮予約枠で、実際の練習予定と時間帯が重なり施設予約が衝突するため)
 MUSIC_ROOM_SKIP_TITLES = ['北村', '前田']
 
+# ファイル名(ics)にこれらのキーワードを含むカレンダーは同期対象から完全に除外する
+# (例: Personal_xxxx@group.calendar.google.com.ics, Share_xxxx@group.calendar.google.com.ics)
+EXCLUDED_CALENDAR_KEYWORDS = ['personal', 'share']
+
 """
 Selenium のドライバ管理は自動化されました。
 もし Chrome の起動に失敗する場合は、Chrome が最新バージョンであることを確認してください。
@@ -53,6 +57,9 @@ while True:
         gcal_other = []
         gcal_music_room = []
         for calender in calender_list:
+            if any(keyword.lower() in calender.lower() for keyword in EXCLUDED_CALENDAR_KEYWORDS):
+                print(f"  Skipping excluded calendar: {calender}")
+                continue
             is_music_room = calender == 'music_room.ics'
             extra_participants = MUSIC_ROOM_EXTRA_PARTICIPANTS if is_music_room else None
             extra_facilities = MUSIC_ROOM_EXTRA_FACILITIES if is_music_room else None

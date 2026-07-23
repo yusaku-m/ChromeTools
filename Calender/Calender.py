@@ -163,6 +163,10 @@ class GoogleCalender(Calender):
             except_date = self.extract(raw_schedule, 'EXDATE;TZID=Asia/Tokyo:')
             origin_date = self.extract(raw_schedule, 'RECURRENCE-ID;TZID=Asia/Tokyo:')
 
+            # TEMP DEBUG: 同期漏れ調査用
+            if any(k in name for k in ('機械設計製図', '材料力学', '保護者等面談')):
+                print(f"[DEBUG][{source}] name={name!r} repeat_rule={repeat_rule!r} on_weekday={on_weekday!r} start_time={start_time!r} start_day={start_day!r} uid={uid!r}")
+
             #日時情報を抽出
             #print(f'{name}, {start_time}, {end_time}, {rstart_time}, {rend_time}, {repeat_rule}, {uid}')
 
