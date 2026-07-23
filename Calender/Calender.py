@@ -1,5 +1,44 @@
+import re
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+from icalendar import Calendar as ICalendar
+from dateutil.rrule import rrulestr
+
 from Calender import Event
 from tqdm import tqdm
+
+JST = ZoneInfo('Asia/Tokyo')
+_RECUR_HORIZON = timedelta(days=365 * 100)  # UNTIL/COUNTが無い無制限の繰り返しに対する実質的な上限
+
+
+def _to_naive_jst(dt):
+    """aware/naiveなdatetime、またはdateを、tzinfo無しのJST datetimeに正規化する"""
+    if isinstance(dt, datetime):
+        if dt.tzinfo is not None:
+            return dt.astimezone(JST).replace(tzinfo=None)
+        return dt
+    return datetime.combine(dt, datetime.min.time())
+
+
+def _normalize_rrule_until(rrule_str):
+    """RRULE文字列中のUNTILを、dtstartと同じnaive-JST形式(YYYYMMDDTHHMMSS、Z無し)に書き換える。
+    GoogleのRRULEはUNTILがUTC(...Z)の場合と、非標準な時刻無しの裸の日付の場合があり
+    (実データのFREQ=DAILY;UNTIL=20190829で確認済み)、dtstart側をnaiveにして渡すには
+    UNTIL側も型を揃える必要がある(揃えないとdateutilの
+    「DTSTARTがaware(tzinfo付き)ならUNTILはUTC必須」制約に非標準な裸日付が違反しValueErrorになる)。"""
+    m = re.search(r'UNTIL=(\d{8})(T(\d{6})(Z)?)?', rrule_str)
+    if not m:
+        return rrule_str
+    date_part, _, time_part, has_z = m.groups()
+    if has_z:
+        until_utc = datetime.strptime(date_part + time_part, '%Y%m%d%H%M%S').replace(tzinfo=timezone.utc)
+        new_until = _to_naive_jst(until_utc).strftime('%Y%m%dT%H%M%S')
+    elif time_part:
+        new_until = date_part + 'T' + time_part
+    else:
+        new_until = date_part + 'T235959'
+    return rrule_str[:m.start()] + f'UNTIL={new_until}' + rrule_str[m.end():]
 
 class Calender():
     """複数予定の集合"""
@@ -103,145 +142,110 @@ class CybozeCalender(Calender):
 class GoogleCalender(Calender):
     """googleカレンダー予定"""
     def __init__(self, name ='calender', source = None, unifiedeventname = None, extra_participants = None, extra_facilities = None, skip_allday = False, skip_titles = None):
-        super().__init__(name)  
+        super().__init__(name)
         self.name = name
         self.events = []
-        #カレンダー全体を読み込み
-        raw_calender = open(f"./data/GoogleCalender/{source}", 'r', encoding='UTF-8').read()
-        #イベント毎に分割
-        raw_calender = raw_calender.split('BEGIN:VEVENT')
-        #現在の西暦を取得
-        from datetime import datetime
-        from datetime import timedelta
-        ThisYear = datetime.today().year
-        ThisMonth = datetime.today().month
-        #print(ThisYear, ThisMonth)
-        except_num = 0
 
-        for raw_schedule in tqdm(raw_calender[1:]):
+        path = f"./data/GoogleCalender/{source}"
+        with open(path, 'rb') as f:
+            ical = ICalendar.from_ical(f.read())
 
-            #単発予定の情報を抽出
-            if unifiedeventname == None:
-                name = self.extract(raw_schedule, 'SUMMARY:')
-            else:
-                name = unifiedeventname
+        vevents = [c for c in ical.walk() if c.name == 'VEVENT']
+
+        #繰り返しの例外予定(RECURRENCE-IDを持つ上書きイベント)を先に集めておく。
+        #マスター側の展開時に、該当オカレンスをこちらの内容で置き換える
+        overrides = {}
+        for comp in vevents:
+            recurrence_id = comp.get('RECURRENCE-ID')
+            if recurrence_id is not None:
+                uid = str(comp.get('UID'))
+                overrides[(uid, _to_naive_jst(recurrence_id.dt))] = comp
+
+        for comp in tqdm(vevents):
+            if comp.get('RECURRENCE-ID') is not None:
+                continue  #上書きイベント自体はマスター側の展開時に反映するのでここでは無視
+
+            event_name = self._extract_name(comp, unifiedeventname)
 
             #予定名で丸ごとスキップ(例:施設と重複する個人名の仮予約予定)
-            if skip_titles and name in skip_titles:
+            if skip_titles and event_name in skip_titles:
                 continue
 
-            start_day   = self.extract(raw_schedule, 'DTSTART;VALUE=DATE:')
-            end_day     = self.extract(raw_schedule, 'DTEND;VALUE=DATE:')
-
-            #開始時間の検索
-            start_time  = self.extract(raw_schedule, 'DTSTART:')
-            if start_time != "":
-                sdaytime = datetime.strptime(start_time, '%Y%m%dT%H%M%SZ') + timedelta(hours = 9)
-
-            start_time = self.extract(raw_schedule, 'DTSTART;TZID=Asia/Tokyo:')
-            if start_time != "":
-                sdaytime = datetime.strptime(start_time, '%Y%m%dT%H%M%S')
-            
-            #修了時間の検索
-            end_time    = self.extract(raw_schedule, 'DTEND:')
-            if end_time != "":
-                edaytime = datetime.strptime(end_time, '%Y%m%dT%H%M%SZ') + timedelta(hours = 9)
-
-            end_time2   = self.extract(raw_schedule, 'DTEND;TZID=Asia/Tokyo:')
-            if end_time2 != "":
-                edaytime = datetime.strptime(end_time2, '%Y%m%dT%H%M%S')
-
+            uid = str(comp.get('UID'))
+            dtstart = comp.get('DTSTART').dt
+            #dateutil.rruleでの展開後は常にdatetimeになってしまうため、終日予定かどうかは
+            #展開前のDTSTARTの型(date/datetime)で判定して個別に持ち歩く
+            is_allday = not isinstance(dtstart, datetime)
+            dtend_prop = comp.get('DTEND')
             #DTENDが存在しない予定(瞬間的な予定)は開始時刻と同じ終了時刻を仮定する
-            if end_time == "" and end_time2 == "" and start_day == "":
-                edaytime = sdaytime
+            dtend = dtend_prop.dt if dtend_prop is not None else dtstart
 
-            uid         = self.extract(raw_schedule, 'UID:')
-
-            #繰り返し予定の情報を抽出
-            repeat_rule = self.extract(raw_schedule, 'RRULE:')
-            on_weekday  = self.extract(raw_schedule, 'BYDAY=') # 実施曜日(MO,TU,WE,TH,FR,SA,SU)
-            except_date = self.extract(raw_schedule, 'EXDATE;TZID=Asia/Tokyo:')
-            origin_date = self.extract(raw_schedule, 'RECURRENCE-ID;TZID=Asia/Tokyo:')
-
-            # TEMP DEBUG: 同期漏れ調査用
-            if any(k in name for k in ('機械設計製図', '材料力学', '保護者等面談')):
-                print(f"[DEBUG][{source}] name={name!r} repeat_rule={repeat_rule!r} on_weekday={on_weekday!r} start_time={start_time!r} start_day={start_day!r} uid={uid!r}")
-
-            #日時情報を抽出
-            #print(f'{name}, {start_time}, {end_time}, {rstart_time}, {rend_time}, {repeat_rule}, {uid}')
+            rrule_prop = comp.get('RRULE')
 
             #単発予定の場合
-            if repeat_rule == '':
-                #予定の追加
-                #終日予定
-                if start_day != '' and not skip_allday:
-                    sdaytime = datetime.strptime(start_day, '%Y%m%d')
-                    edaytime = datetime.strptime(end_day, '%Y%m%d')
-                    id = str([name, sdaytime, edaytime, uid])
-                    delta = edaytime - sdaytime
-                    for i in range(delta.days):
-                        self.events.append(Event.AllDay(name,sdaytime+timedelta(days=i),sdaytime+timedelta(days=i+1),id,participants=extra_participants,facilities=extra_facilities))
-                
-                #時間予定
-                if start_day == '':
-                    id = str([name, sdaytime, edaytime, uid])
-                    self.events.append(Event.Event(name, sdaytime, edaytime, id, participants=extra_participants, facilities=extra_facilities))
+            if rrule_prop is None:
+                self._append_occurrence(event_name, dtstart, dtend, uid, extra_participants, extra_facilities, skip_allday, is_allday)
+                continue
 
-                #繰り返しの例外予定
-                if origin_date != '':
-                    odaytime = datetime.strptime(origin_date, '%Y%m%dT%H%M%S')
-                    #print(odaytime)
-                    #変更元の予定を削除
-                    self.events = [event for event in self.events if not (event.start_time == odaytime and uid in event.id)]
+            #繰り返し予定の場合: dateutil.rruleで実際のオカレンス日時に展開する
+            naive_dtstart = _to_naive_jst(dtstart)
+            duration = _to_naive_jst(dtend) - naive_dtstart
+            rrule_str = _normalize_rrule_until(rrule_prop.to_ical().decode())
+            rr = rrulestr(f"RRULE:{rrule_str}", dtstart=naive_dtstart)
+            horizon = datetime.now() + _RECUR_HORIZON
+            exdates = self._extract_exdates(comp)
 
-            #繰り返し予定（かつ時間有）の場合
-            if repeat_rule != '' and start_time != '' and end_time != '':
-                #毎週繰り返しの場合
-                if 'FREQ=WEEKLY' in repeat_rule:
-                    #除外日を取得
-                    exceptdaytimes = []
-                    for i in range(int(len(except_date)/15)):
-                        exceptdaytimes.append(datetime.strptime(except_date[i*15:(i+1)*15], '%Y%m%dT%H%M%S'))
-                    #終了日を取得        
-                    if 'UNTIL=' in repeat_rule:                    #日時指定の場合
-                        untiltime = repeat_rule.split('UNTIL=')[1].split(';')[0]
-                        #print(f'{name}, {rstart_time}, {untiltime}')
-                        try:
-                            untiltime = datetime.strptime(untiltime, '%Y%m%dT%H%M%SZ') + timedelta(hours = 9)
-                        except:
-                            untiltime = datetime.strptime(untiltime, '%Y%m%d')
-                    if 'COUNT=' in repeat_rule:                    #回数指定の場合
-                        count_num = int(repeat_rule.split('COUNT=')[1].split(';')[0])
-                        untiltime = sdaytime
-                        for i in range(count_num):
-                            untiltime += timedelta(days = 7)
+            for occ_start in rr.between(naive_dtstart, horizon, inc=True):
+                if occ_start in exdates:
+                    continue
 
-                    #終了まで予定を作成
-                    weekdays = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU']
-                    while sdaytime < untiltime:
-                        if weekdays[sdaytime.weekday()] in on_weekday:
-                            #除外予定の判定
-                            ex_flag = 0
-                            for daytime in exceptdaytimes:
-                                if sdaytime == daytime:
-                                    ex_flag = 1
-                            if ex_flag == 0:
-                                id = str([name, sdaytime, edaytime, uid])
-                                self.events.append(Event.Event(name, sdaytime, edaytime, id, participants=extra_participants, facilities=extra_facilities))
-                        #次の日へ
-                        sdaytime += timedelta(days = 1)
-                        edaytime += timedelta(days = 1)
-        # 読み込み完了後，sourceを削除
+                override = overrides.get((uid, occ_start))
+                if override is not None:
+                    o_name = self._extract_name(override, unifiedeventname)
+                    if skip_titles and o_name in skip_titles:
+                        continue
+                    o_dtstart = override.get('DTSTART').dt
+                    o_is_allday = not isinstance(o_dtstart, datetime)
+                    o_dtend_prop = override.get('DTEND')
+                    o_dtend = o_dtend_prop.dt if o_dtend_prop is not None else o_dtstart
+                    self._append_occurrence(o_name, o_dtstart, o_dtend, uid, extra_participants, extra_facilities, skip_allday, o_is_allday)
+                else:
+                    self._append_occurrence(event_name, occ_start, occ_start + duration, uid, extra_participants, extra_facilities, skip_allday, is_allday)
+
+        #読み込み完了後，sourceを削除
         import os
-        os.remove(f"./data/GoogleCalender/{source}")
-        
+        os.remove(path)
 
-    def extract(self, raw, search):
-        if search in raw:
-            buf = raw.split(search)
-            result = ''
-            for line in buf[1:]:
-                result += line.split('\n')[0]
+    def _append_occurrence(self, name, dtstart, dtend, uid, extra_participants, extra_facilities, skip_allday, is_allday):
+        """単発予定・繰り返し展開後の1件のオカレンスをself.eventsに追加する"""
+        sdaytime = _to_naive_jst(dtstart)
+        edaytime = _to_naive_jst(dtend)
+        id = str([name, sdaytime, edaytime, uid])
+
+        if is_allday:
+            if skip_allday:
+                return
+            delta = edaytime - sdaytime
+            for i in range(delta.days):
+                self.events.append(Event.AllDay(name, sdaytime+timedelta(days=i), sdaytime+timedelta(days=i+1), id, participants=extra_participants, facilities=extra_facilities))
         else:
-            result = ''
-        return result
+            self.events.append(Event.Event(name, sdaytime, edaytime, id, participants=extra_participants, facilities=extra_facilities))
+
+    @staticmethod
+    def _extract_name(comp, unifiedeventname):
+        if unifiedeventname is not None:
+            return unifiedeventname
+        summary = comp.get('SUMMARY')
+        return str(summary) if summary is not None else ''
+
+    @staticmethod
+    def _extract_exdates(comp):
+        exdates = set()
+        exdate_prop = comp.get('EXDATE')
+        if exdate_prop is None:
+            return exdates
+        items = exdate_prop if isinstance(exdate_prop, list) else [exdate_prop]
+        for item in items:
+            for d in item.dts:
+                exdates.add(_to_naive_jst(d.dt))
+        return exdates
