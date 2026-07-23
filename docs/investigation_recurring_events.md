@@ -3,6 +3,9 @@
 - 調査日: 2026-07-22
 - 対象: `ScheduleSync.py` / `Calender/Calender.py` の `GoogleCalender` パーサー
 - 結論: **RRULE(繰り返し)を持つ予定は、実質的に一つも展開・同期されていない。** 単発予定は正常に動作している。
+- **対応状況(2026-07-23): 対応済み。** `Calender/Calender.py` の `GoogleCalender.__init__` を
+  `icalendar`+`dateutil.rrule`ベースの実装に置き換え、本レポートの根本原因1〜3をすべて解消した
+  (実データ・回帰テストで確認済み)。以下は修正前の調査記録として残す。
 
 ## 調査方法
 
