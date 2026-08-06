@@ -215,15 +215,26 @@ class Browser:
 
         self.wait_for_manual_step(_ready, description=description)
 
-    def wait_download(self, timeout_start=15):
+    def wait_download(self, timeout_start=15, stall_timeout=180):
         import glob
         download_dir = os.path.join(os.getcwd(), "data")
+        pattern = os.path.join(download_dir, "*.crdownload")
+
+        # 呼び出し時点で既に存在する .crdownload は、過去に中断されたダウンロードの
+        # 残骸(Chromeを強制終了させた場合などに残る)。これらは二度と完了しないため、
+        # 監視対象から除外する。除外しないと下の完了待ちループを永久に抜けられない。
+        stale = set(glob.glob(pattern))
+        for f in stale:
+            print(f"  Ignoring stale .crdownload: {os.path.basename(f)}")
+
+        def in_progress():
+            return [f for f in glob.glob(pattern) if f not in stale]
 
         # まずダウンロード開始（.crdownload出現）を最大timeout_start秒待つ
         # ダウンロードが既に始まっている・または高速完了した場合は即抜け
         deadline = time.time() + timeout_start
         while time.time() < deadline:
-            if glob.glob(os.path.join(download_dir, "*.crdownload")):
+            if in_progress():
                 break
             time.sleep(0.5)
         else:
@@ -231,8 +242,34 @@ class Browser:
             return
 
         # .crdownloadが消えるまで待つ（完了）
+        # ファイルサイズが stall_timeout 秒間まったく増えない場合は、Chrome側の
+        # ダウンロード確認ダイアログ等でブロックされているとみなして中断する
+        # (無限待機してスクリプトが固まるのを防ぐ)
         print('Download in progress...')
-        while glob.glob(os.path.join(download_dir, "*.crdownload")):
+        last_sizes = None
+        last_progress = time.time()
+        while True:
+            files = in_progress()
+            if not files:
+                break
+
+            sizes = {}
+            for f in files:
+                try:
+                    sizes[f] = os.path.getsize(f)
+                except OSError:
+                    pass
+
+            if sizes != last_sizes:
+                last_sizes = sizes
+                last_progress = time.time()
+            elif time.time() - last_progress > stall_timeout:
+                names = ', '.join(os.path.basename(f) for f in files)
+                raise TimeoutError(
+                    f"ダウンロードが{stall_timeout}秒間進行しませんでした: {names} / "
+                    "Chromeのダウンロード確認（「保存」「継続」ボタン等）で"
+                    "止まっていないか確認してください。"
+                )
             time.sleep(0.5)
         print('Download finished.')
 
