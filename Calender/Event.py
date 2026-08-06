@@ -1,9 +1,27 @@
+import re
+
 from selenium import webdriver
 from selenium.webdriver.support.select import Select
 
 from selenium.webdriver.common.by import By
 
 from Chrome.Browser import DatabaseBusyError
+
+_ICAL_ESCAPE_RE = re.compile(r'\\([\\,;nN])')
+
+def _unescape_legacy_ical_text(text):
+    """RFC5545のTEXTエスケープ(\\, \\; \\\\ \\n)が未展開のまま残っている
+    レガシーな文字列を正規化する。旧ics parser(icalendar導入前、SUMMARY:行を
+    素朴に文字列分割するだけの実装)はRFC5545アンエスケープに対応しておらず、
+    それ以前にサイボウズへ入力された予定は、タイトルにコンマ等を含む場合
+    (例:バンド名「Fear, and Loathing in ...」)エスケープされたバックスラッシュが
+    Detail/Memo欄にそのまま残っている。現行のicalendarベースのパーサーは正しく
+    アンエスケープするため、正規化せずに比較するとレガシー予定と恒久的に
+    不一致になり、既に入力済みでも再入力を試み続けてしまう。"""
+    def repl(m):
+        c = m.group(1)
+        return '\n' if c in ('n', 'N') else c
+    return _ICAL_ESCAPE_RE.sub(repl, text)
 
 class Event():
     """予定単体のクラス"""
@@ -28,8 +46,11 @@ class Event():
         idまで一致を要求すると、既にサイボウズに入力済みでも「未入力」と誤判定して
         再入力を試み、施設予約なら二重予約エラーで停止・リトライを繰り返し、
         施設予約でなければ気付かれないままサイボウズ側に重複行が増え続けていた
-        (実データ確認済み: 同一タイトル・同一時刻の重複行が複数件見つかった)。"""
-        return self.title == event.title and self.start_time == event.start_time and self.end_time == event.end_time
+        (実データ確認済み: 同一タイトル・同一時刻の重複行が複数件見つかった)。
+        titleについても同種の理由で_unescape_legacy_ical_text()を通してから
+        比較する(詳細はその関数のdocstring参照)。"""
+        return (_unescape_legacy_ical_text(self.title) == _unescape_legacy_ical_text(event.title)
+                and self.start_time == event.start_time and self.end_time == event.end_time)
 
     def _add_participants(self, driver):
         """参加者(sUID)セレクトに追加の参加者を差し込む。
