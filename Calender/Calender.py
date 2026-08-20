@@ -6,6 +6,7 @@ from icalendar import Calendar as ICalendar
 from dateutil.rrule import rrulestr
 
 from Calender import Event
+from Calender.Event import _unescape_legacy_ical_text
 from tqdm import tqdm
 
 JST = ZoneInfo('Asia/Tokyo')
@@ -55,6 +56,22 @@ class Calender():
     def union(self, calender, new_name = 'union'):
         """入力カレンダーと結合"""
         return Calender(new_name, self.events + calender.events)
+
+    def unique(self, new_name = 'unique'):
+        """title・start_time・end_time が同一の重複予定を1件に集約する。
+        同じカレンダーが一括エクスポート(exporticalzip)と個別取得(get_extra_calendars)の
+        両方から入ってくると、同一予定が2件ずつ gcal に入り、サイボウズへ二重入力
+        (施設予約付きなら二重予約エラー)になるため、diff前に潰しておく。
+        判定条件は Event.match() と同じ。"""
+        events = []
+        seen = set()
+        for event in self.events:
+            key = (_unescape_legacy_ical_text(event.title), event.start_time, event.end_time)
+            if key in seen:
+                continue
+            seen.add(key)
+            events.append(event)
+        return Calender(new_name, events)
 
     def substract(self, calender, new_name = 'substract'):
         """入力カレンダーとの重複予定を削除"""

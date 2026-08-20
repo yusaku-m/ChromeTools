@@ -19,6 +19,18 @@ MUSIC_ROOM_EXTRA_FACILITIES = [
 # (個人の仮予約枠で、実際の練習予定と時間帯が重なり施設予約が衝突するため)
 MUSIC_ROOM_SKIP_TITLES = ['北村', '前田']
 
+# ファイル名(ics)にこれらのキーワードを含むカレンダーは音楽練習室カレンダー扱いにする
+# (施設「音楽練習室」の付与・終日予定スキップ・同期範囲の拡張)。
+# 'music_room' は get_extra_calendars() が個別取得して保存するファイル名。
+# 'keionbu' は一括エクスポート(exporticalzip)側に混入してくる同じカレンダー
+# (kagawakosenkeionbu@gmail.com の主カレンダー)を拾うためのもの。以前は一括
+# エクスポートから漏れていたので個別取得していたが、Google側の共有状態の変化で
+# 一括エクスポートにも含まれるようになった。ファイル名でしか判別できず、
+# 'music_room.ics' 決め打ちだと混入分が「ただの他人のカレンダー」として
+# 個人予定(施設予約なし・終日予定込み・北村/前田の仮予約込み)としてサイボウズに
+# 入力されてしまう。両方に現れた同一予定は後段の unique() で1件に集約する。
+MUSIC_ROOM_CALENDAR_KEYWORDS = ['music_room', 'keionbu']
+
 # ファイル名(ics)にこれらのキーワードを含むカレンダーは同期対象から完全に除外する
 # (例: Personal_xxxx@group.calendar.google.com.ics, Share_xxxx@group.calendar.google.com.ics)
 EXCLUDED_CALENDAR_KEYWORDS = ['personal', 'share']
@@ -60,7 +72,9 @@ while True:
             if any(keyword.lower() in calender.lower() for keyword in EXCLUDED_CALENDAR_KEYWORDS):
                 print(f"  Skipping excluded calendar: {calender}")
                 continue
-            is_music_room = calender == 'music_room.ics'
+            is_music_room = any(keyword.lower() in calender.lower() for keyword in MUSIC_ROOM_CALENDAR_KEYWORDS)
+            if is_music_room:
+                print(f"  Treating as music room calendar: {calender}")
             extra_participants = MUSIC_ROOM_EXTRA_PARTICIPANTS if is_music_room else None
             extra_facilities = MUSIC_ROOM_EXTRA_FACILITIES if is_music_room else None
             skip_titles = MUSIC_ROOM_SKIP_TITLES if is_music_room else None
@@ -75,6 +89,11 @@ while True:
             gcal_other = Calender.Calender('gcal_other', [])
         if gcal_music_room == []:
             gcal_music_room = Calender.Calender('gcal_music_room', [])
+
+        # 同一カレンダーが一括エクスポートと個別取得の両方から入ってくることがあるため、
+        # 同一予定(タイトル・開始・終了が一致)を1件に集約してから差分をとる
+        gcal_other = gcal_other.unique('gcal_other')
+        gcal_music_room = gcal_music_room.unique('gcal_music_room')
 
         gcal = gcal_other.union(gcal_music_room)
 
