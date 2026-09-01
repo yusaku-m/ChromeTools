@@ -4,6 +4,7 @@
 *.ics
 *.csv
 *.pdf
+*.xlsx
 /data/*
 # pixi environments
 .pixi
