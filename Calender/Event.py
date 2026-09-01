@@ -152,6 +152,39 @@ class Event():
         self._submit_schedule_entry(browser, terget_url, set_time=True)
 
 
+    #検索結果一覧で予定リンクを特定するときに、タイトル以外に許容する末尾文字。
+    #参加者・施設が複数ある予定はリンクテキスト末尾に"+"が付く。
+    _LINK_TEXT_SUFFIXES = ('', '+', '…', '...')
+
+    def _find_schedule_link(self, driver):
+        """検索結果ページからこの予定の詳細リンクを探す。見つからなければNone。
+
+        以前は By.PARTIAL_LINK_TEXT でタイトルの部分一致検索をしていたが、これは
+        ページ内のどのリンクでも、たまたまタイトルを部分文字列として含んでいれば
+        拾ってしまう。実害が確認されている:画面右上のログインユーザー名リンク
+        「前田祐作」がタイトル「前田」の予定(音楽練習室カレンダーの個人名
+        プレースホルダが過去に誤って同期されたもの)にマッチしてしまい、検索結果では
+        なくユーザー名リンクをクリック→遷移先に「削除する」リンクが無いため
+        TimeoutExceptionでスキップ、という流れでこの予定が永久に削除できなかった。
+
+        そのため、リンクテキストがタイトルと完全一致(末尾の"+"等の装飾のみ許容)
+        するリンクだけを対象にする。"""
+        candidates = driver.find_elements(By.PARTIAL_LINK_TEXT, self.title)
+        texts = []
+        for a in candidates:
+            try:
+                texts.append((a.text or '').strip())
+            except Exception:
+                texts.append(None)
+        for suffix in self._LINK_TEXT_SUFFIXES:
+            wanted = self.title + suffix
+            for a, text in zip(candidates, texts):
+                if text == wanted:
+                    return a
+        if texts:
+            print(f"情報: 「{self.title}」に部分一致するリンクはありましたが完全一致しませんでした: {texts}")
+        return None
+
     def delete_cyboze(self, browser,monitor = False):
         """サイボウズの予定削除"""
         #現在の西暦を取得
@@ -180,16 +213,13 @@ class Event():
         select.select_by_index(len(select.options)-1)
         driver.find_element(By.NAME, "Submit").click()
         #削除
-        #参加者・施設が複数ある予定はリンクテキスト末尾に"+"が付くため部分一致で検索する
-        #検索結果に見つからない(既に手動削除された等)場合、safe_clickはTimeoutExceptionを
-        #投げる。1件見つからないだけで同期全体を止めないよう、警告を出してこのイベントの
-        #削除だけスキップする
-        from selenium.common.exceptions import TimeoutException
-        try:
-            browser.safe_click((By.PARTIAL_LINK_TEXT, self.title))
-        except TimeoutException:
+        #検索結果に見つからない(既に手動削除された等)場合は、1件見つからないだけで
+        #同期全体を止めないよう、警告を出してこのイベントの削除だけスキップする
+        target = self._find_schedule_link(driver)
+        if target is None:
             print(f"警告: 削除対象「{self.title}」({self.start_time}~{self.end_time})がサイボウズの検索結果に見つからないためスキップします。")
             return
+        browser.safe_click(target)
         browser.safe_click((By.LINK_TEXT, '削除する'))
         #参加者が2名以上いる予定は「全参加者の予定を削除する/自分の予定だけ削除する」の
         #選択が必須(未選択のままYesを押すと"条件を選択してください。"のalertで弾かれる)
