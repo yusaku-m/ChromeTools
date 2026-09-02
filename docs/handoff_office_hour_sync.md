@@ -1,61 +1,94 @@
-# 引継ぎ: 変形労働カレンダー → Google Calendar 自動同期
+# 変形労働カレンダー → Google Calendar 自動同期
 
 ## 目的
 半期ごとに手動でやっている以下の作業を自動化する。
 1. 変形労働カレンダーのxlsx（教員修正用シート）から勤務時間を抽出してicsを作る
-2. Googleカレンダーの既存「Office Hour」カレンダーを削除して作り直す
-3. 新しいicsをその「Office Hour」カレンダーへインポートする
+2. 新しいicsを Googleカレンダーの「Office hour」カレンダーへ取り込む
 
-## 完了済み（1のみ）
-`変形労働カレンダーical化.py` を修正済み。
-- 旧実装は固定ファイル名`calender.csv`を読む前提だったが、現在の運用ではリポジトリ直下に
-  `令和8年度変形労働カレンダー（高松キャンパス教員）下半期マスター_ME前田 ★修正あり.xlsx`
-  のような、年度・上期/下期・修正状況で毎回名前が変わるxlsxが置かれる。
-  `find_source_xlsx()`が`*変形労働カレンダー*.xlsx`をglobして1件に絞る（0件/複数件はエラー）。
-- 年度はファイル名の「令和N年度」から`fiscal_year_from_filename()`で西暦に変換して求める
-  （`datetime.date.today()`基準の推測はやめた）。
-- xlsxの「教員修正用」シートを`pandas.read_excel(..., header=None)`で読み、
-  行4:40・列(month*4(+2)):(+4)のレイアウト（旧calender.csv版と同じ構造）で
-  時刻範囲（'～'を含む）が入っている行だけを勤務予定として拾う。半期のうち
-  データが入っていない側の期間は自然に0件になる（正常動作、要修正ではない）。
-- ics生成は手書き文字列連結から`icalendar`ライブラリ（pixi.tomlに既存の依存）に置き換え。
-- 実データで動作確認済み: 103件を正しく読み取り`data/Office_Hour.ics`を生成できた。
-- 個人の勤務表xlsxがコミットされないよう`.gitignore`に`*.xlsx`を追加済み。
+当初は「2. 既存のOffice Hourカレンダーを削除して作り直す」「3. icsをインポートする」の
+2段構えを想定していたが、**カレンダー削除は不要になった**（下記「UID上書きの検証結果」）。
 
-## 未着手（2, 3）— ここがブロック中
-GoogleカレンダーでOffice Hourカレンダーを削除→再作成→ics再インポートする部分は未実装。
+## 現状: 実装・実データでの通し確認まで完了
 
-ユーザーとの合意事項:
-- 「削除」は個々の予定を検索して1件ずつ消すのではなく、**Office Hourカレンダー自体を削除して
-  同名で作り直す**方式でよい（Google Calendarには予定の一括削除UIが無いため、既存の運用も
-  カレンダーごと作り直している）。
-- 実装前に、実際のGoogleカレンダーの設定画面をClaude in Chrome拡張で（閲覧のみ、削除や作成等の
-  実操作はせず）確認し、正確なUI構造を把握してから自動化コードを書く方針で合意済み。
-  Google CalendarはSPAでクラス名等が不安定なため、憶測でセレクタを書くのは避けたい。
+### スクリプトの一本化
+同じ目的のスクリプトが3本あったのを `Other/WorkingCalenderToIcalender.py` に統合した。
+- 削除: `変形労働カレンダーical化.py`（リポジトリ直下・xlsx対応版）
+- 削除: `Other/WorkingCalenderToICAL.py`（`WorkingCalender.csv` を読む3列組レイアウト版。
+  勤務時間の前後を「不在」として出力する別仕様だった。加えて `data_list[1:31]` の
+  スライスで毎月31日を取りこぼすバグがあった）
+- 残す: `Other/WorkingCalenderToIcalender.py` ← ここに集約
 
-作業が止まっていた理由: このセッションではClaude in Chrome拡張がPCに未接続
-（`tabs_context_mcp`が「Browser extension is not connected」を返す）だったため、
-実画面の確認ができていない。拡張のインストール/起動待ちの状態で中断。
+`find_source_xlsx()` はスクリプトがOther/配下に移ったため、**リポジトリ直下と
+スクリプトと同じディレクトリの両方**から `*変形労働カレンダー*.xlsx` を探す
+（xlsxはリポジトリ直下に置かれる運用）。
 
-### 次にやること
-1. Claude in Chrome拡張を接続した状態で、`https://calendar.google.com/calendar/u/0/r/settings`
-   から以下を閲覧のみで確認する:
-   - 左側の「マイカレンダー」一覧で「Office Hour」を選んだときの設定ページ（削除ボタンの位置・
-     確認ダイアログの構造）
-   - 「+ 他のカレンダーを追加」→「新しいカレンダーを作成」で名前を指定して作る際のフォーム
-   - 設定内「インポート/エクスポート」ページのインポートフォーム（ファイル選択input・
-     インポート先カレンダーのプルダウン・インポートボタン）
-2. 確認したセレクタを使って`Chrome/GoogleCalender.py`（クラス`GoogleCalender(Browser)`）に
-   削除→作成→インポートをまとめたメソッドを追加する。実装は`Chrome/Browser.py`の
-   `patient_get`/`safe_click`/`wait_for_manual_step`の流儀に合わせること
-   （Windows Hello等の手動待ちが挟まる可能性があるため）。
-3. `変形労働カレンダーical化.py`の`if __name__ == "__main__":`末尾で、ics生成後に
-   上記メソッドを呼び出すように結線する（現状はics生成のみで止まっている）。
-4. カレンダー削除は取り消せない操作なので、初回実行はユーザー立ち会いのもとで確認しながら
-   行うこと。
+### UID上書きの検証結果（2026-09-02、実カレンダーで確認）
+生成する各VEVENTに日付固定のUID `officehour-YYYYMMDD@officehour.chrometools` を
+振るようにした。これにより **Googleカレンダーへの再インポートは重複作成ではなく
+既存予定の更新になる**。
+
+検証手順と結果:
+- 2030-06-05 / 06-06 の 9:00–10:00「勤務」2件を含むicsを `Office hour` へインポート
+  → `Imported 2 out of 2 events.`、2件作成された
+- **同じUIDのまま時刻だけ 14:00–15:00 に変えた**icsを再インポート
+  → `Imported 2 out of 2 events.`、件数は2件のまま**時刻だけが置き換わった**（重複なし）
+- 時刻のズレなし。タイムゾーンを付けないフローティング時刻＋`X-WR-TIMEZONE:Asia/Tokyo`
+  で JST として正しく解釈される（旧実装から変えていない形式）
+- 検証に使った2件は削除済み
+
+したがって「取り消し不能なカレンダー削除 → 再作成」は実装しない。
+
+### Googleカレンダーへの取り込み（`Chrome/GoogleCalender.import_ics()`）
+設定 > インポート/エクスポート（`https://calendar.google.com/calendar/u/0/r/settings/export`）
+のフォームを操作する。確認済みのDOM構造:
+
+| 要素 | セレクタ | 注意点 |
+|---|---|---|
+| ファイル選択 | `input[type=file][name="filename"]` | CSSで隠されているが `send_keys()` は通る。**クリックするとOSのファイル選択ダイアログが開く**ので絶対にクリックしない |
+| インポート先 | `[role=combobox][aria-haspopup=listbox]` → `//ul[@role="listbox"]//li[@role="option"]` | `<select>` ではないので `Select` は使えない |
+| インポート実行 | `button[jsname="N8B8lb"]` | ファイル未選択の間は `disabled` |
+| 結果ダイアログ | `div[role=alertdialog]` | 文言は `Imported N out of M events.`（英語UI） |
+
+**インポート先の選択は座標ではなくオプションの表示テキストで引くこと。**
+リストの表示位置は「前回選択した項目」に応じて上下にずれるため、座標決め打ちだと
+別のカレンダーが選ばれる。実機で `Office hour` を狙って `Share` が選択される事象を
+確認済み（インポート前に選択内容を目視確認して事なきを得た）。`import_ics()` は
+選択後に combobox の表示テキストを検証してから実行するようにしてある。
+
+`aria-label`（`Add to calendar`）はUI言語に依存するのでセレクタに使っていない。
+このアカウントのGoogleカレンダーUIは現在 English (US)。
+
+カレンダー名は Google側の実表記に合わせて **`Office hour`（hは小文字）**。
+統合前のスクリプトは `'Office Hour'` だったので、表示テキストで引く以上ここは一致必須。
+
+### エントリポイント
+```
+python Other/WorkingCalenderToIcalender.py
+```
+xlsxを探す → ics生成（`data/Office_Hour.ics`）→ 取り込むか対話で確認 → `import_ics()`。
+Chromeプロファイルは ScheduleSync.py と同じ自動化専用プロファイル
+（`C:/Users/Yusaku/AppData/Local/Google/Chrome/AutoSyncData/`）。
+
+## 実データでの通し確認（2026-09-02）
+`令和8年度変形労働カレンダー（高松キャンパス教員）下半期マスター_ME前田 ★修正あり.xlsx`（下半期）で実施。
+- xlsx読み取り: 103件（2026-10-02〜2027-03-31、月別 10月22/11月16/12月16/1月16/2月17/3月16）、UID重複なし
+- インポート前の `Office hour` は2026-09-30までしか勤務予定が無く（上半期分）、下半期は空だったため既存予定との衝突なし
+- `import_ics()` を2回実行。1回目も2回目も `Imported 103 out of 103 events.`、
+  カレンダーは1日1件のままで**重複は発生しなかった**（実データでも冪等）
+
+**実行はpixi環境で行うこと。** `Chrome/status.binaryfile` は numpy 2.x でpickle化されているため、
+システムのPython 3.10（numpy 1.24）で実行すると `open_status()` が
+`ModuleNotFoundError: No module named 'numpy._core'` で落ちる。
+`pixi run python Other/WorkingCalenderToIcalender.py` のように起動する。
+
+## 既知の割り切り（対応しない）
+- **勤務日→週休日に変わった日の予定がGoogle側に残る。** 今回のicsに無いUIDの予定は
+  インポートでは消えない。手動で足りる頻度でしか生じないため、掃除の仕組みは実装しない。
+- **`Office hour` がScheduleSync.pyの同期対象に入っている**（`EXCLUDED_CALENDAR_KEYWORDS` に
+  含まれない）ので「勤務」予定はサイボウズにも入力される。これは意図通り。
 
 ## 関連ファイル
-- `変形労働カレンダーical化.py` — 今回修正したエントリスクリプト
-- `Chrome/GoogleCalender.py` — Googleカレンダー操作クラス（削除/作成/インポートを追加する場所）
-- `Chrome/Browser.py` — `patient_get`/`safe_click`/`wait_for_manual_step`等の共通部品
-- `Chrome/status.binaryfile` — `googleID`等の永続設定
+- `Other/WorkingCalenderToIcalender.py` — 統合済みエントリスクリプト
+- `Chrome/GoogleCalender.py` — `import_ics()` / `_select_import_calendar()`
+- `Chrome/Browser.py` — `patient_get`/`safe_click`/`wait_for_manual_step` 等の共通部品
+- `Chrome/status.binaryfile` — `googleID` 等の永続設定

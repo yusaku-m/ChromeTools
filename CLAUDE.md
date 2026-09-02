@@ -99,6 +99,20 @@ Deleting an event with more than one participant/facility has two gotchas `delet
 
 Locating the search-result row must **not** be a bare `By.PARTIAL_LINK_TEXT` on the title: that matches any link on the page containing the title as a substring, including Cybozu's header links. Confirmed live: an event titled `前田` (a music_room per-person placeholder that got wrongly synced before `skip_titles` existed) matched the logged-in user's name link `前田祐作` in the top-right of every page, so `delete_cyboze()` clicked that instead of the search result, found no 削除する link on the page it landed on, and skipped the event with the "検索結果に見つからない" warning — forever, on every run. `Event._find_schedule_link()` now requires the link text to equal the title exactly, allowing only a trailing decoration from `Event._LINK_TEXT_SUFFIXES` (`+` for multi-participant/facility events, `…`/`...` in case Cybozu ever truncates). If partial matches exist but none matches exactly, it prints their texts and returns `None` so a future Cybozu format change is visible in the log instead of silently clicking the wrong link.
 
+### Office Hour（変形労働カレンダー → Google Calendar）
+
+`Other/WorkingCalenderToIcalender.py` が、半期ごとに配布される変形労働カレンダーのxlsx（`*変形労働カレンダー*.xlsx`、「教員修正用」シート）から勤務時間を抽出して `data/Office_Hour.ics` を生成し、Googleカレンダーの `Office hour` カレンダーへ取り込む。同じ目的のスクリプトが3本（旧`Other/WorkingCalenderToICAL.py`、旧`変形労働カレンダーical化.py`）あったのをこの1本に統合した。ScheduleSync.py の流れとは独立した別エントリポイント。
+
+各VEVENTには日付固定のUID `officehour-YYYYMMDD@officehour.chrometools` を振ってある。これが効いていて、**同じicsを再インポートしても重複せず既存予定が更新される**（2026-09-02に実カレンダーで確認: 9:00–10:00で2件取り込んだ後、同UID・14:00–15:00のicsを再インポートすると件数は2件のまま時刻だけ置き換わった）。当初想定していた「カレンダーごと削除して作り直す」方式は不要になったので実装していない。UIDを日付以外のもの（ランダム等）に変えると、この性質が失われて半期ごとに重複が積み上がるので変えないこと。時刻はタイムゾーンを付けないフローティング時刻＋`X-WR-TIMEZONE:Asia/Tokyo` で書く（JSTとして正しく解釈されることを同時に確認済み）。
+
+裏を返すと、**前回のicsには有ったが今回のicsには無いUID**（勤務日→週休日に変わった日）の予定はGoogle側に残り続ける。これは手動で足りる頻度でしか生じないため、掃除の仕組みは意図的に実装していない。また `Office hour` は `EXCLUDED_CALENDAR_KEYWORDS` に含まれないので「勤務」予定はサイボウズにも同期されるが、これも意図通り。
+
+`Chrome/GoogleCalender.import_ics(ics_path, calendar_name)` が設定 > インポート/エクスポート画面（`.../r/settings/export`）を操作する。ファイル選択の `input[type=file][name="filename"]` はCSSで隠されているが `send_keys()` は通る — **クリックしてはいけない**（OSのファイル選択ダイアログが開いてSeleniumから操作できなくなる）。インポート先の「カレンダーに追加」は `<select>` ではなくGoogle独自のリストボックス（`[role=combobox][aria-haspopup=listbox]` → `ul[role=listbox] li[role=option]`）なので `Select` は使えず、**座標でもなくオプションの表示テキストで引く**必要がある。リストの表示位置は前回選択項目に応じて上下にずれるため、座標決め打ちだと別のカレンダーが選ばれる（実機で `Office hour` を狙って `Share` が選択される事象を確認済み）。`_select_import_calendar()` は選択後に combobox の表示テキストを検証してから戻る。`aria-label`（`Add to calendar`）はUI言語依存なのでセレクタに使っていない。カレンダー名は Google側の実表記 `Office hour`（hは小文字）に厳密に一致させること。
+
+2026-09-02に下半期の実xlsxで通し確認済み: 103件を読み取り、`import_ics()` を2回実行しても`Imported 103 out of 103 events.` で1日1件のまま重複しなかった。**実行はpixi環境で行うこと** — `Chrome/status.binaryfile` は numpy 2.x でpickle化されており、システムのPython 3.10（numpy 1.24）で走らせると `Browser.open_status()` が `ModuleNotFoundError: No module named 'numpy._core'` で落ちる。
+
+詳細は `docs/handoff_office_hour_sync.md`。
+
 ### File locations
 
 - `./data/` — downloaded files (Cybozu CSV, Google Calendar ICS/ZIP); files are deleted after parsing
@@ -107,7 +121,7 @@ Locating the search-result row must **not** be a bare `By.PARTIAL_LINK_TEXT` on 
 
 ### Legacy code
 
-`Edge/` contains an older version using `msedge-selenium-tools` (Edge WebDriver), superseded by the `Chrome/` implementations. `Other/` has standalone utility scripts.
+`Edge/` contains an older version using `msedge-selenium-tools` (Edge WebDriver), superseded by the `Chrome/` implementations. `Other/` has standalone utility scripts — note that `Other/WorkingCalenderToIcalender.py` is *not* legacy, it is the active Office Hour entry point (see above).
 
 ## Known Limitations
 

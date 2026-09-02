@@ -3,6 +3,12 @@ from Chrome.Browser import Browser
 from selenium.webdriver.common.by import By
 
 class GoogleCalender(Browser):
+    # 「インポート/エクスポート」画面(設定 > Import & export)のURL。
+    IMPORT_URL = 'https://calendar.google.com/calendar/u/0/r/settings/export'
+    # インポート結果ダイアログの文言。英語UIは "Imported 2 out of 2 events."、
+    # 日本語UIは「2 件中 2 件の予定をインポートしました。」のような形になる。
+    _IMPORT_RESULT_RE = r'(\d+)\D+(\d+)'
+
     def get_calender(self):
         import time, zipfile, glob
         EXPORT_URL = 'https://calendar.google.com/calendar/u/0/exporticalzip'
@@ -116,3 +122,100 @@ class GoogleCalender(Browser):
                 os.remove(dst)
             os.replace(src, dst)
             print(f"  Saved: {dst}")
+
+    def import_ics(self, ics_path, calendar_name):
+        """設定 > インポート/エクスポート から ics を指定カレンダーへ取り込む。
+
+        icsの各予定に固定UIDが振ってあれば、同じUIDの予定は重複作成ではなく
+        更新として扱われる(2026-09-02に実カレンダーで確認済み: 9:00-10:00で
+        取り込んだ2件を、同UID・14:00-15:00のicsで再取り込みしたところ、
+        件数は2件のまま時刻だけが置き換わった)。このためカレンダーごと削除して
+        作り直す必要はない。
+
+        ただし、前回のicsには有ったが今回のicsには無いUIDの予定(勤務日→週休日に
+        変わった日など)は消えずに残る。それらの掃除はこのメソッドの責任外。
+        """
+        import re
+        import time
+        from selenium.webdriver.support import expected_conditions as EC
+        from selenium.webdriver.support.wait import WebDriverWait
+
+        ics_path = os.path.abspath(ics_path)
+        if not os.path.isfile(ics_path):
+            raise FileNotFoundError(f'インポートするicsが見つかりません: {ics_path}')
+
+        # ファイル選択のinputは常にDOM上にあるので、これを目印にページの到達を待つ
+        # (Windows HelloのPINダイアログ等で遷移がブロックされるケースへの対策)
+        file_input_locator = (By.CSS_SELECTOR, 'input[type="file"][name="filename"]')
+        self.patient_get(self.IMPORT_URL, description='Googleカレンダーのインポート画面', wait_for=file_input_locator)
+
+        # CSSで隠されたinputだが、send_keys()はdisplay:noneでも受け付ける
+        # (クリックするとOSのファイル選択ダイアログが開いてしまうのでクリックしない)
+        self.driver.find_element(*file_input_locator).send_keys(ics_path)
+
+        self._select_import_calendar(calendar_name)
+
+        # 「インポート」ボタン。ファイル未選択の間はdisabledなので、有効になるまで待つ
+        import_button = WebDriverWait(self.driver, 20).until(
+            lambda d: next((b for b in d.find_elements(By.CSS_SELECTOR, 'button[jsname="N8B8lb"]') if b.is_enabled()), None)
+        )
+        self.safe_click(import_button)
+
+        # 結果ダイアログ(「Imported N out of M events.」)の出現を待つ。
+        # 要素の存在だけを条件にすると、文言が描画される前の空のダイアログを掴んでしまい
+        # メッセージが空文字で返る(実行時に確認済み)ので、テキストが入るまで待つ。
+        def _result_dialog(driver):
+            for d in driver.find_elements(By.CSS_SELECTOR, 'div[role="alertdialog"], div[role="dialog"]'):
+                try:
+                    if (d.text or '').strip():
+                        return d
+                except Exception:
+                    pass
+            return None
+
+        dialog = WebDriverWait(self.driver, 300).until(_result_dialog)
+        # dialog.textにはOKボタンの文字も含まれるので、1行目(結果の文言)だけ使う
+        message = (dialog.text or '').strip().splitlines()[0]
+        print(f'インポート結果: {message}')
+
+        m = re.search(self._IMPORT_RESULT_RE, message)
+        imported, total = (int(m.group(1)), int(m.group(2))) if m else (None, None)
+        if imported is not None and imported != total:
+            print(f'警告: {total}件中{imported}件しかインポートされませんでした。')
+
+        # OKで閉じる。閉じないと次の操作がダイアログに遮られる
+        for ok in dialog.find_elements(By.TAG_NAME, 'button'):
+            if (ok.text or '').strip():
+                self.safe_click(ok)
+                break
+        time.sleep(1)
+        return imported, total
+
+    def _select_import_calendar(self, calendar_name):
+        """インポート画面の「カレンダーに追加」でインポート先カレンダーを選ぶ。
+
+        これは<select>ではなくGoogle独自のリストボックスウィジェットなので、
+        Selectクラスは使えない。またリストの表示位置は前回選択項目に応じて
+        変わるため、座標ではなくオプションの表示テキストで引く必要がある
+        (座標決め打ちで別カレンダーを選んでしまう事象を実機で確認済み)。
+        aria-labelはUI言語に依存するので使わない。"""
+        from selenium.webdriver.support import expected_conditions as EC
+        from selenium.webdriver.support.wait import WebDriverWait
+
+        combobox_locator = (By.CSS_SELECTOR, '[role="combobox"][aria-haspopup="listbox"]')
+        combobox = WebDriverWait(self.driver, 20).until(EC.presence_of_element_located(combobox_locator))
+        self.safe_click(combobox)
+
+        option_xpath = f'//ul[@role="listbox"]//li[@role="option"][normalize-space(.)="{calendar_name}"]'
+        options = self.driver.find_elements(By.XPATH, option_xpath)
+        if not options:
+            available = [(li.text or '').strip() for li in self.driver.find_elements(By.CSS_SELECTOR, 'ul[role="listbox"] li[role="option"]')]
+            raise RuntimeError(f'インポート先カレンダー「{calendar_name}」が見つかりません。候補: {available}')
+        self.safe_click(options[0])
+
+        # 選択が実際に反映されたか確認する。反映前にインポートを押すと
+        # 別のカレンダーへ取り込まれてしまい、取り消しが面倒になる
+        WebDriverWait(self.driver, 10).until(
+            lambda d: calendar_name in (d.find_element(*combobox_locator).text or '')
+        )
+        print(f'インポート先: {calendar_name}')
