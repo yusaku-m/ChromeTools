@@ -99,6 +99,23 @@ Deleting an event with more than one participant/facility has two gotchas `delet
 
 Locating the search-result row must **not** be a bare `By.PARTIAL_LINK_TEXT` on the title: that matches any link on the page containing the title as a substring, including Cybozu's header links. Confirmed live: an event titled `前田` (a music_room per-person placeholder that got wrongly synced before `skip_titles` existed) matched the logged-in user's name link `前田祐作` in the top-right of every page, so `delete_cyboze()` clicked that instead of the search result, found no 削除する link on the page it landed on, and skipped the event with the "検索結果に見つからない" warning — forever, on every run. `Event._find_schedule_link()` now requires the link text to equal the title exactly, allowing only a trailing decoration from `Event._LINK_TEXT_SUFFIXES` (`+` for multi-participant/facility events, `…`/`...` in case Cybozu ever truncates). If partial matches exist but none matches exactly, it prints their texts and returns `None` so a future Cybozu format change is visible in the log instead of silently clicking the wrong link.
 
+### サイボウズ Garoon 6 への移行（2026-11-09）
+
+高専のサイボウズは **2026-11-09(月)** に Office 10 から **Garoon 6.17.2** へ移行する（Office 10 のライセンス終了は 2027-03-31、試験運用期間は 2026-09-15〜10-15）。Garoon には **REST API** があるので、Office 10 で必要だった Selenium の画面操作は全部捨てられる。`Garoon/Client.py` の `GaroonClient` と `Calender.GaroonCalender` が実装済みで、`ScheduleSync.py` の `BACKEND`（`'cybozu'` / `'garoon'`、既定は `'cybozu'`）で切り替える。移行当日はこの定数を `'garoon'` にするだけ。環境変数 `SCHEDULE_SYNC_BACKEND` でも上書きできる。残作業は `docs/backlog_garoon.md`。
+
+- ベースURL `https://garoon.da.kagawa-nct.ac.jp/scripts/cbgrn/grn.exe/api/v1`。認証は **`X-Cybozu-Authorization: base64("ログイン名:パスワード")` ヘッダのみ**。`Authorization: Basic` も Windows 統合認証もブラウザのセッションクッキーも通らない（実機確認済み）。資格情報は Windows 資格情報マネージャー（`keyring`、service=`ChromeTools-Garoon`）に置き、`Other/set_garoon_password.py` で登録する。
+- **Office → Garoon のコンバートでメモ欄・施設・参加者はそのまま保持される**（実機確認済み）。したがって「メモに `datetime.datetime(` を含む＝このツールが自動入力した予定」という同一性判定はそのまま通用し、移行直後に全件が再入力される事態は起きない。
+- `GET /schedule/events` は `notes` をそのまま返し、予定の `id` も取れる。これにより **CSV エクスポート＋pandas パース（`Cyboze.get_calender()` / `CybozeCalender`）も、削除時にタイトルで検索結果のリンクを探す処理（`Event._find_schedule_link()`）も不要になる**。削除は ID 直指定。`Chrome` の全プロセス kill も Windows Hello の PIN 待ち（`patient_get`）も不要。
+- エラーはネイティブ `alert()` ではなく HTTP 400 + `X-Cybozu-Error` で返るので、`_dismiss_lingering_alert()` 相当も不要。実測したコード: `GRN_SCHD_13208`＝施設の二重予約（Office 10 の 14312 相当）、`GRN_SCHD_13207`＝終日予定に施設は予約できない（**`skip_allday` は引き続き必要**）、`GRN_SCHD_13001`＝予定が存在しない、`GRN_REST_API_00003`＝認証情報なし。401 の本文は IIS のカスタム HTML エラーページに差し替えられているので、**本文ではなく `X-Cybozu-Error` ヘッダで判断すること**。
+- **`GET /base/users` の絞り込みパラメータは `name` であって `code` ではない。** `?code=maeda-y` は黙って無視され全件の先頭（Administrator 等）が返る。エラーにならないので気づきにくい。`name` にログイン名を渡し、返ってきた中から `code` の完全一致を選ぶこと。これを誤ると参加者が空になり `POST /schedule/events` が 400 `GRN_REST_API_00216` で失敗する。
+- **Garoon は終日予定を「その日の 00:00:00 〜 23:59:59」で返す。** `GoogleCalender` と `CybozeCalender` は終日予定の終了を「翌日 00:00」（終端排他）で持っているため、`GaroonCalender` で翌日 00:00 に正規化しないと `Event.match()` が永久に一致せず、**終日予定が毎回すべて再入力される**（実機の3か月分で終日が135件中89件あった）。
+- 参加者・施設は数値IDではなく **`code`**（`maeda-y` / `band` / `kitamura-d` / `of_1_音楽練習室`）で引く。Garoon の数値IDは Office 10 とは全く別の連番で、本移行時に試験環境とも変わりうる。施設一覧 `GET /schedule/facilities` は `limit`/`offset` でページングすること（全127件あり、音楽練習室がちょうど127番目なので `limit=100` 一回だけでは取りこぼす）。
+- **`rangeEnd` には 2037-12-31(JST) という絶対的な上限がある**（超えると 400 `GRN_REST_API_00220`）。期間の長さの制限ではなく絶対的な日付の天井で、`rangeStart` を後ろにずらしても同じ日付で切れる（いわゆる2038年問題）。`ScheduleSync.py` の music_room 用「実質無制限」ウィンドウ（`now + 100年`）は Garoon 使用時にここで頭打ちにしている。頭打ちにしないと、上限より先の予定が ccal 側に存在しえないため毎回「未入力」と判定されて登録を試み続ける。
+- `ScheduleSync.py` には **`DRY_RUN`**（環境変数 `SCHEDULE_SYNC_DRY_RUN=1`）がある。差分を表示するだけで入力・削除を一切行わない。移行当日はまず dry-run で差分の妥当性を確認してから本実行すること。
+- **読み戻した `Calender` をそのまま `delete_schedule()` に渡してはいけない。** 検証スクリプトでこれをやり、試験環境の実予定22件を実際に削除した（2026-09-16）。検証で作った予定を消すときは、自分が作成したIDのリストだけを対象にすること。
+
+2026-09-16 に試験環境で `BACKEND=garoon` の通し実行を完走（警告・エラーゼロ）。削除22件・入力296件が全件成功し、マーカー付き予定は 1878 → 2152。施設つき996件・終日320件を含め、参加者/施設/終日の往復が正しいことを確認済み。
+
 ### Office Hour（変形労働カレンダー → Google Calendar）
 
 `Other/WorkingCalenderToIcalender.py` が、半期ごとに配布される変形労働カレンダーのxlsx（`*変形労働カレンダー*.xlsx`、「教員修正用」シート）から勤務時間を抽出して `data/Office_Hour.ics` を生成し、Googleカレンダーの `Office hour` カレンダーへ取り込む。同じ目的のスクリプトが3本（旧`Other/WorkingCalenderToICAL.py`、旧`変形労働カレンダーical化.py`）あったのをこの1本に統合した。ScheduleSync.py の流れとは独立した別エントリポイント。

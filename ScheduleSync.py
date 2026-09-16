@@ -1,9 +1,27 @@
+import os
 import time
 from datetime import datetime, timedelta
 
 from Chrome.GoogleCalender import GoogleCalender
 from Chrome.Cyboze import Cyboze
 from Calender import Calender
+
+# 同期先のバックエンド。
+#   'cybozu' : サイボウズ Office 10 (Selenium で画面操作)
+#   'garoon' : サイボウズ Garoon 6 (REST API)
+# 高専のサイボウズは2026-11-09(月)に Office 10 から Garoon 6 へ移行する。
+# それまでは 'cybozu' のまま運用し、移行当日に 'garoon' へ切り替える。
+# 切り替え後に必要な準備は Other/set_garoon_password.py の実行(資格情報の保存)だけ。
+# ファイルを書き換えずに一時的に切り替えたい場合は環境変数 SCHEDULE_SYNC_BACKEND で上書きできる。
+BACKEND = os.environ.get('SCHEDULE_SYNC_BACKEND', 'cybozu')
+
+# 差分を表示するだけで、サイボウズ側への入力・削除を一切行わないモード。
+# 環境変数 SCHEDULE_SYNC_DRY_RUN=1 で有効になる。
+#   pixi run python ScheduleSync.py        (通常どおり同期する)
+#   $env:SCHEDULE_SYNC_DRY_RUN=1; pixi run python ScheduleSync.py   (差分の確認だけ)
+# 移行当日は BACKEND を 'garoon' にしたうえで、まず dry-run で差分が妥当か
+# (大量の削除・再入力が出ていないか)を確認してから本実行すること。
+DRY_RUN = os.environ.get('SCHEDULE_SYNC_DRY_RUN', '') == '1'
 
 # 音楽練習室カレンダー由来の予定にのみ追加する参加者・施設(サイボウズ内部ID, 表示名)
 # 「音楽練習室」はサイボウズ上では参加者ではなく施設として登録されているため、
@@ -14,6 +32,17 @@ MUSIC_ROOM_EXTRA_PARTICIPANTS = [
 ]
 MUSIC_ROOM_EXTRA_FACILITIES = [
     ('7919', '音楽練習室'),
+]
+
+# Garoon 版の同じもの。Garoon の内部IDは Office 10 とは全く別の連番なので、
+# 数値IDではなくログイン名/施設コード(code)で指定する。codeは本移行でも
+# 変わらない見込みだが、数値IDは変わる可能性が高いため必ずcode側を使うこと。
+GAROON_MUSIC_ROOM_EXTRA_PARTICIPANTS = [
+    ('band', '軽音楽部'),
+    ('kitamura-d', '北村　大地'),
+]
+GAROON_MUSIC_ROOM_EXTRA_FACILITIES = [
+    ('of_1_音楽練習室', '音楽練習室'),
 ]
 # 音楽練習室カレンダー由来の予定のうち、これらのタイトルは同期しない
 # (個人の仮予約枠で、実際の練習予定と時間帯が重なり施設予約が衝突するため)
@@ -75,8 +104,14 @@ while True:
             is_music_room = any(keyword.lower() in calender.lower() for keyword in MUSIC_ROOM_CALENDAR_KEYWORDS)
             if is_music_room:
                 print(f"  Treating as music room calendar: {calender}")
-            extra_participants = MUSIC_ROOM_EXTRA_PARTICIPANTS if is_music_room else None
-            extra_facilities = MUSIC_ROOM_EXTRA_FACILITIES if is_music_room else None
+            if BACKEND == 'garoon':
+                music_room_participants = GAROON_MUSIC_ROOM_EXTRA_PARTICIPANTS
+                music_room_facilities = GAROON_MUSIC_ROOM_EXTRA_FACILITIES
+            else:
+                music_room_participants = MUSIC_ROOM_EXTRA_PARTICIPANTS
+                music_room_facilities = MUSIC_ROOM_EXTRA_FACILITIES
+            extra_participants = music_room_participants if is_music_room else None
+            extra_facilities = music_room_facilities if is_music_room else None
             skip_titles = MUSIC_ROOM_SKIP_TITLES if is_music_room else None
             buf = Calender.GoogleCalender('gcal', calender, extra_participants=extra_participants, extra_facilities=extra_facilities, skip_allday=is_music_room, skip_titles=skip_titles)
             if is_music_room:
@@ -98,17 +133,31 @@ while True:
         gcal = gcal_other.union(gcal_music_room)
 
         """サイボウズカレンダーに自動入力された予定の取得"""
-        user_data_path = "C:/Users/Yusaku/AppData/Local/Google/Chrome/AutoSyncData/"
-        cyboze = Cyboze(user_data_path)
-        cyboze.set_id(name='前田　祐作',uid='5791',department='機械工学科',gid='2100')
-        cyboze.login()
-        cyboze.get_calender()
+        now = datetime.now()
 
-        ccal = Calender.CybozeCalender('ccal','./data/CybozeSchedule.csv')
+        if BACKEND == 'garoon':
+            from Garoon import GaroonClient, RANGE_END_MAX
+            # Garoon は REST API なのでブラウザもログインも不要。
+            # 資格情報は Windows 資格情報マネージャーから読む
+            # (未登録なら Other/set_garoon_password.py を実行すること)。
+            cyboze = GaroonClient()
+            print(f"Garoon に接続しました (login={cyboze.login})")
+            # music_room の照合のため、絞り込み前の全期間分を取得する。
+            # 起点は music_room_start(2025-04-01)より手前、終点は API の上限。
+            ccal = Calender.GaroonCalender(
+                'ccal', cyboze.get_events(datetime(2025, 1, 1), RANGE_END_MAX))
+            print(f"Garoon から自動同期済みの予定を {len(ccal.events)} 件取得しました")
+        else:
+            user_data_path = "C:/Users/Yusaku/AppData/Local/Google/Chrome/AutoSyncData/"
+            cyboze = Cyboze(user_data_path)
+            cyboze.set_id(name='前田　祐作',uid='5791',department='機械工学科',gid='2100')
+            cyboze.login()
+            cyboze.get_calender()
+
+            ccal = Calender.CybozeCalender('ccal','./data/CybozeSchedule.csv')
 
         """予定を期間で絞り込み"""
 
-        now = datetime.now()
         start = now-timedelta(days = 1)
         end =   now+timedelta(days = 365)
 
@@ -119,7 +168,10 @@ while True:
         delete = ccal_filter.substract(gcal_filter, 'delete')
         if len(delete.events) > 0:
             delete.view(id=False)
-            cyboze.delete_schedule(delete)
+            if DRY_RUN:
+                print(f"[DRY RUN] {len(delete.events)} 件の削除をスキップしました")
+            else:
+                cyboze.delete_schedule(delete)
         else:
             print("No delete event")
 
@@ -133,13 +185,24 @@ while True:
         # してしまうため、フィルタしていない全件のccalと突き合わせる
         music_room_start = datetime(2025, 4, 1)
         music_room_end = now + timedelta(days=365 * 100)  # 実質無制限
+        if BACKEND == 'garoon':
+            # Garoon の予定APIは rangeEnd に 2037-12-31 という絶対的な上限があり
+            # (いわゆる2038年問題。超えると 400 GRN_REST_API_00220)、ccal 側には
+            # それ以降の予定が存在しえない。gcal 側だけ100年先まで見ていると、
+            # 上限より先の予定が毎回「未入力」と判定されて登録を試みることになる
+            # ため、gcal 側の窓も同じ上限で頭打ちにする。
+            from Garoon import RANGE_END_MAX
+            music_room_end = min(music_room_end, RANGE_END_MAX)
         gcal_music_room_filter = gcal_music_room.filtering_by_date(music_room_start, music_room_end)
         music_room_input = gcal_music_room_filter.substract(ccal, 'music_room_input')
         input_events = input_events.union(music_room_input, 'input')
 
         if len(input_events.events) > 0:
             input_events.view()
-            cyboze.input_schedule(input_events)
+            if DRY_RUN:
+                print(f"[DRY RUN] {len(input_events.events)} 件の入力をスキップしました")
+            else:
+                cyboze.input_schedule(input_events)
         else:
             print("No input event")
 
@@ -152,6 +215,9 @@ while True:
         import traceback
         traceback.print_exc()
         print(f"Error occurred: {e}")
+        if DRY_RUN:
+            # 確認目的の実行なので、黙って再試行せず失敗を表に出す
+            raise
         print("Chrome の起動に失敗した可能性があります。")
         print("1. Chrome が最新バージョンであることを確認してください。")
         print("2. 他の Chrome ウィンドウをすべて閉じてから再試行してください。")
@@ -159,4 +225,8 @@ while True:
 
         time.sleep(5)
 
-input("finish sync. press enter to close this window.")
+try:
+    input("finish sync. press enter to close this window.")
+except EOFError:
+    #バッチや自動実行など、標準入力が無い環境から呼ばれた場合
+    print("finish sync.")

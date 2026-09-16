@@ -156,6 +156,51 @@ class CybozeCalender(Calender):
         import os
         os.remove(source)
 
+class GaroonCalender(Calender):
+    """Garoon の予定(REST API 経由)。
+
+    Office 10 時代の `CybozeCalender` の置き換え。CSV をダウンロードして
+    pandas で読む代わりに `Garoon.GaroonClient.get_events()` の結果を受け取る。
+    判定条件は CybozeCalender と揃えてあり、メモ(notes)に
+    `datetime.datetime(` を含む予定＝このツールが自動入力した予定だけを対象に
+    する。他の方が入力してくださった予定を削除対象にしないための判定で、
+    Office → Garoon のコンバートでメモ欄がそのまま保持されていることは
+    実機で確認済み。
+
+    CybozeCalender との違いは各 Event に `garoon_id`(Garoon の予定ID)を
+    持たせること。削除時にタイトルで検索し直す必要がなくなる。
+    """
+
+    def __init__(self, name='GaroonCalender', source=None):
+        """sourceには GaroonClient.get_events() が返した予定のリストを渡す"""
+        super().__init__(name)
+        self.name = name
+        def _parse(value):
+            #Python 3.10 の fromisoformat は 'Z' を解釈できない
+            return _to_naive_jst(datetime.fromisoformat(value.replace('Z', '+00:00')))
+
+        for raw in tqdm(source or [], desc='Garoon予定の読み込み'):
+            notes = raw.get('notes') or ''
+            if 'datetime.datetime(' not in notes:  #他の方が入力した予定はカウントしない
+                continue
+            start = raw.get('start') or {}
+            end = raw.get('end') or {}
+            if not start.get('dateTime') or not end.get('dateTime'):
+                continue
+            start_time = _parse(start['dateTime'])
+            end_time = _parse(end['dateTime'])
+            if raw.get('isAllDay'):
+                #Garoon は終日予定を「その日の 00:00:00 〜 23:59:59」で返す。
+                #一方 GoogleCalender 側(と CybozeCalender)は終日予定の終了を
+                #「翌日 00:00」(終端排他)で持っているため、揃えないと
+                #Event.match() が永久に一致せず、終日予定が毎回再入力される。
+                #実機の3か月分で終日予定が135件中89件あり、放置すると被害が大きい。
+                end_time = datetime(end_time.year, end_time.month, end_time.day) + timedelta(days=1)
+            event = Event.Event(raw.get('subject', ''), start_time, end_time, notes)
+            event.garoon_id = raw.get('id')
+            self.events.append(event)
+
+
 class GoogleCalender(Calender):
     """googleカレンダー予定"""
     def __init__(self, name ='calender', source = None, unifiedeventname = None, extra_participants = None, extra_facilities = None, skip_allday = False, skip_titles = None):
