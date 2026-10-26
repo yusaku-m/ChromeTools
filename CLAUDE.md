@@ -20,6 +20,7 @@ python ScheduleSync.py  # run schedule sync
 
 - **Schedule sync** (main use case): `python ScheduleSync.py`
 - **Sakura messaging**: `python makemail_sakura.py`
+- **SHR欠席者へのさくら連絡網**: `python shr_absence_sakura.py [YYYY-MM-DD]`（送信確認画面で止まる）
 - Individual modules can be run directly (each has `if __name__ == "__main__"` blocks with hardcoded user paths)
 
 Scripts require Chrome to be installed and not running — `Browser.__init__` kills all Chrome processes before launching.
@@ -129,6 +130,18 @@ Locating the search-result row must **not** be a bare `By.PARTIAL_LINK_TEXT` on 
 2026-09-02に下半期の実xlsxで通し確認済み: 103件を読み取り、`import_ics()` を2回実行しても`Imported 103 out of 103 events.` で1日1件のまま重複しなかった。**実行はpixi環境で行うこと** — `Chrome/status.binaryfile` は numpy 2.x でpickle化されており、システムのPython 3.10（numpy 1.24）で走らせると `Browser.open_status()` が `ModuleNotFoundError: No module named 'numpy._core'` で落ちる。
 
 詳細は `docs/handoff_office_hour_sync.md`。
+
+### SHR欠席者へのさくら連絡網（`shr_absence_sakura.py`）
+
+`SHR.xlsx`（担任フォルダ、OneDrive）の「点呼簿」シートから対象日の不在者を読み、直近に送信済みの「SHRへの出席について【M/D（曜）】」をコピーして件名の日付を書き換え、宛先を「個人から選ぶ」→ `機械工学科３年` から不在者に差し替え、送信確認画面（「送信」ボタンがある画面）まで進めて止まる。**送信はユーザーが押す。** ScheduleSync.py とは独立したエントリポイント。
+
+- **SHR.xlsx・さくらの受信者一覧・サイボウズの欠席連絡は個人情報。氏名をログや画面出力に出さないこと**（件数と出席番号だけを出す）。さくらの宛先ページのスクリーンショットも撮らない。調査は JS で件数や属性名、文字種の統計だけを取って行った。
+- 点呼簿は **199行目が日付**（`=B2` 等）、**200〜245行目が「出席番号_苗字　名前」**（不在でなければ空文字）。どちらも数式なので `openpyxl` の `data_only=True` で読むのはキャッシュ値で、Excel で開いて保存していない日付は存在しない。
+- さくらの受信者 `data-name` は「苗字　名前(〇〇3〇)」と**末尾にクラスの括弧書きが付く**ため、Excel の氏名と完全一致しない。`Chrome.Sakura.normalize_name()` で括弧書きと空白を落として照合する（2026-10 の実データで9/28〜10/5の4日分が全件一致、過去の送信件数とも一致）。
+- 画面操作はボタンの位置ではなく、`onclick` に書かれた JS を直接呼ぶ: `Worker.OpenResult(No)` → `ResultWorker.CopyDist()`（confirm と完了 alert が続けて出る）→ `OpenDistEdit_Update(No)` → `MsgEditWorker.MessageNextPage()` → `OpenSubModal('screen-send-select')` → `DefineSendSelect(DIST_SEND_SELECT_TYPE.ACCOUNT)` → `OpenAccountAddModal(MsgEditWorker.LvSendAccount)` → `#cmbAccountSearchAff` で学年クラスを選択 → `#lstAccountAdd` のチェックボックス → `DefineAccountAddModal()` → `DefineSendDetail()`。学年クラスには同名の「（保護者）」グループもあるので、表示名の完全一致で選ぶ。
+- 編集ダイアログの `txtSubject` は `MsgEditWorker` の初期化より先に表示されるので、件名の値が入るまで待ってから操作する（待たないと `MsgEditWorker` が null で落ちる）。
+- `AutoSyncData` プロファイルにはさくらのパスワードが保存されていないため、`Sakura.login()` は自動入力が無ければ手動ログインを待つ。開発時は `--remote-debugging-port=9333` で起動した Chrome に `--debugger-address 127.0.0.1:9333` で接続すれば、ログインし直さずに済む。
+- Garoon の「学生欠席等連絡」カレンダーとの照合（欠席連絡済みの学生を宛先から除外）は未実装。`docs/backlog_garoon.md` の4。
 
 ### File locations
 
