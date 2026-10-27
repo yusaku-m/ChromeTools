@@ -20,7 +20,8 @@ python ScheduleSync.py  # run schedule sync
 
 - **Schedule sync** (main use case): `python ScheduleSync.py`
 - **Sakura messaging**: `python makemail_sakura.py`
-- **SHR欠席者へのさくら連絡網**: `pixi run shr [MMDD]`（`python shr_absence_sakura.py [MMDD|YYYY-MM-DD]` と同じ）（送信確認画面で止まる）
+- **SHR欠席者へのさくら連絡網**: `pixi run shr [MMDD]`（`python shr_absence_sakura.py [MMDD|YYYY-MM-DD]` と同じ）（送信確認画面で止まり、送信完了の alert を検知して終了）
+- 両スクリプトとも `-x 3,15,22` でサイボウズに欠席連絡がある学生の出席番号を宛先から除外できる（`absence_notice.py`。Garoon からの自動取得＝`docs/backlog_garoon.md` の4 までの手動版。授業欠課では除外した学生を送信記録に `欠席連絡あり` として書き、やり直しても飛ばす。`--force` では `送らず` と同じく聞き直す）
 - **授業欠課者へのさくら連絡網**: `pixi run absence [MMDD]`（`python class_absence_sakura.py`。`--inspect` で出力ファイルの構造確認）（学生ごとに送信確認画面で止まる）
 - Individual modules can be run directly (each has `if __name__ == "__main__"` blocks with hardcoded user paths)
 
@@ -145,13 +146,14 @@ Locating the search-result row must **not** be a bare `By.PARTIAL_LINK_TEXT` on 
 - コピー元が「個人から選ぶ」で宛先を入れたメール（＝このスクリプトで送ったもの）だと、コピーした下書きに個人の宛先一覧がそのまま残る（Excel 取込で宛先を入れたメールからのコピーでは残らない）。`set_recipients()` は追加前に `MsgEditWorker.LvSendAccount.Clear()` で空にする。
 - 編集ダイアログの `txtSubject` は `MsgEditWorker` の初期化より先に表示されるので、件名の値が入るまで待ってから操作する（待たないと `MsgEditWorker` が null で落ちる）。
 - `AutoSyncData` プロファイルにはさくらのパスワードが保存されていないため、`Sakura.login()` は自動入力が無ければ手動ログインを待つ。開発時は `--remote-debugging-port=9333` で起動した Chrome に `--debugger-address 127.0.0.1:9333` で接続すれば、ログインし直さずに済む。
-- Garoon の「学生欠席等連絡」カレンダーとの照合（欠席連絡済みの学生を宛先から除外）は未実装。`docs/backlog_garoon.md` の4。
+- Garoon の「学生欠席等連絡」カレンダーとの自動照合は未実装（`docs/backlog_garoon.md` の4）。当面は `-x` で出席番号を手で渡す。
+- 送信は授業欠課と同じ `Sakura.wait_for_send()` で完了の alert を検知する（`q` で送らずに終了）。以前は Enter 待ちだった。
 
 ### 授業欠課者へのさくら連絡網（`class_absence_sakura.py`）
 
 丸一日ではなく一部の授業だけ欠課した学生に、学務係への事前連絡を促すメッセージを1人ずつ送る準備をする。`pixi run absence [MMDD]`。日付省略時は行事予定から前回の授業日を求める。欠課の内容（`format_lessons()` の文字列）がまったく同じ学生は1通に複数宛先でまとめ（宛名は「受信者氏名を差し込む」で個別になる）、1通ごとに送信確認画面で止まり、**送信はユーザーが押す**。記録は学生ごとに書く。送信はブラウザで送信した後の alert「メッセージの登録が完了しました。」を `Sakura.wait_for_send()` が検知して記録する（`msvcrt` でキー入力も同時に待つ。`s` で送らずに次へ、`q` で中断）。以前は Enter を送信とみなしていたが、送信できていない学生（出席番号16、2026-10-27）を送信済みと記録したのでやめた。送信前の確認など、それ以外の alert には触らない。
 
-- 送信記録は OneDrive の `Work/講義/そのた科目/class_absence_sent.csv`（列: 日付・出席番号・欠課・結果・記録日時。結果は `送信`/`送らず`/`完了`。BOM 付き UTF-8）。1人ごとに即座に追記するので、`q` で中断しても再実行で残りの学生から続く。最後まで終えた日は `完了` 行があり、次からは何もしない。`--force` は `完了` を無視し `送らず` の学生も聞き直すが、`送信` 済みの学生は常に飛ばす（二重送信防止）。**氏名は書かない**（出席番号のみ）。Excel で開いているとロックされるので、書けなければ閉じるよう促して再試行する。以前の `data/class_absence_done.json` は廃止。
+- 送信記録は OneDrive の `Work/講義/そのた科目/class_absence_sent.csv`（列: 日付・出席番号・欠課・結果・記録日時。結果は `送信`/`送らず`/`欠席連絡あり`（`-x` で除外）/`完了`。BOM 付き UTF-8）。1人ごとに即座に追記するので、`q` で中断しても再実行で残りの学生から続く。最後まで終えた日は `完了` 行があり、次からは何もしない。`--force` は `完了` を無視し `送らず` の学生も聞き直すが、`送信` 済みの学生は常に飛ばす（二重送信防止）。**氏名は書かない**（出席番号のみ）。Excel で開いているとロックされるので、書けなければ閉じるよう促して再試行する。以前の `data/class_absence_done.json` は廃止。
 - さくら連絡網の表示名が Excel/KOSEN WEB の氏名と一致しない学生は、`sakura_names.py` の辞書（OneDrive `Work/講義/そのた科目/sakura_name_alias.csv`、列: 氏名・さくら表示名）で置き換えてから照合する。照合できなかったら表示名の入力を促して辞書に追記し、授業欠課ではそのメッセージを作り直す（SHR は1通にまとめて送るので作り直さず、今回は手動で追加してもらい次回から効く）。**辞書の中身は個人情報。Claude は絶対に読まないこと**（ユーザーの指示）。
 - OneDrive のパスは `paths.py`（`../GRADING/packages/paths.py` と同じ方式: `OneDriveCommercial` → 候補ルートを順に試し `Work/講義` まであるものを優先）。`shr_absence_sakura.py` もこれを使う。
 

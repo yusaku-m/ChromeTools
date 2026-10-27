@@ -2,18 +2,20 @@
 
     pixi run shr             # 今日の分
     pixi run shr 1026        # 日付指定(MMDD、年は今年。YYYY-MM-DD も可)
+    pixi run shr -x 3,15     # サイボウズで欠席連絡がある出席番号を宛先から除外
 
 1. SHR.xlsx の「点呼簿」シートから対象日の不在者を読む
 2. さくら連絡網で直近に送信済みの「SHRへの出席について【…】」をコピー
 3. 件名の日付を書き換え、宛先を「個人から選ぶ」→ 機械工学科３年 から不在者に差し替え
 4. 宛先ページの「次へ」まで進めて止まる。**送信ボタンはユーザーが押す。**
+   送信完了の alert を検知して終了する(q で送らずに終了)。
 
 氏名は個人情報なので、画面にもログにも出さない(件数と出席番号だけ出す)。
 SHR.xlsx は数式の計算結果を読む。Excel で開いていればその現在値を、
 開いていなければ保存時のキャッシュ値を読むので、閉じている場合は保存してから実行すること。
 
-TODO(docs/backlog_garoon.md の4): Garoon の「学生欠席等連絡」カレンダーに
-欠席連絡がある学生を宛先から除外する。
+サイボウズに欠席連絡がある学生は -x で出席番号を渡して除外する。
+TODO(docs/backlog_garoon.md の4): これを Garoon の「学生欠席等連絡」カレンダーから自動で引く。
 """
 
 import argparse
@@ -23,6 +25,7 @@ import sys
 
 import openpyxl
 
+import absence_notice
 from Chrome.Sakura import Sakura
 from paths import onedrive_dir
 from sakura_names import ask_aliases, to_sakura_names
@@ -118,6 +121,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('date', nargs='?', type=parse_date,
                         help='対象日 MMDD(今年) または YYYY-MM-DD。省略時は今日')
+    absence_notice.add_argument(parser)
     parser.add_argument('--excel', default=EXCEL_PATH)
     parser.add_argument('--debugger-address', help='起動済みChromeに接続する(例 127.0.0.1:9333)')
     args = parser.parse_args()
@@ -131,6 +135,7 @@ def main():
         sys.exit(f"点呼簿の{DATE_ROW}行目に {date} がありません。"
                  "SHR.xlsx を Excel で開いて保存(再計算)してから実行してください。")
     print(f"不在者: {len(absentees)} 名")
+    absentees, _ = absence_notice.split(absentees, absence_notice.excluded(args))
     if not absentees:
         print("送信対象がいないので終了します。")
         return
@@ -156,8 +161,12 @@ def main():
 
     for text in sakura.go_send_detail():
         print("  ", text)
-    print("送信前の確認画面まで進めました。内容を確認して、ブラウザで送信してください。")
-    input("送信が済んだら Enter を押してください(ブラウザを閉じて終了します)...")
+    print("送信前の確認画面まで進めました。内容を確認して、ブラウザで送信してください"
+          "(送信の完了を検知して終了します)。送らずに終了するときは q: ", end='', flush=True)
+    if sakura.wait_for_send(keys='q') == 'sent':
+        print("送信を確認しました。")
+    else:
+        print("送信せずに終了します。")
 
 
 if __name__ == '__main__':

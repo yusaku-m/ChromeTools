@@ -4,6 +4,7 @@
     pixi run absence 1026        # 日付指定(MMDD、年は今年。YYYY-MM-DD も可)
     pixi run absence --inspect   # 出力ファイルの構造(見出し行と件数)だけ表示して終わる
     pixi run absence --show      # KOSEN WEB の取得もブラウザ画面を出して行う
+    pixi run absence -x 3,15     # サイボウズで欠席連絡がある出席番号を宛先から除外
 
 KOSEN WEB からの取得はヘッドレスで行う。ログインしていなければ(パスワードの自動入力も無ければ)
 画面ありで起動し直してログインを待つ。さくら連絡網は送信確認を目で見るので常に画面ありで開く。
@@ -21,7 +22,9 @@ KOSEN WEB からの取得はヘッドレスで行う。ログインしていな�
 出力ファイルと氏名は個人情報なので、画面にもログにも出さない(件数・出席番号・時限だけ出す)。
 出力ファイルは一時フォルダに保存し、読み終えたらすぐ消す。
 
-TODO(docs/backlog_garoon.md の4): Garoon の「学生欠席等連絡」に欠席連絡がある学生を除外する。
+サイボウズに欠席連絡がある学生は -x で出席番号を渡して除外する。連絡不要なので送信記録に
+「欠席連絡あり」と書き、やり直しても飛ばす(--force では聞き直す。-x の入力ミスを直せるように)。
+TODO(docs/backlog_garoon.md の4): これを Garoon の「学生欠席等連絡」から自動で引く。
 """
 
 import argparse
@@ -37,6 +40,7 @@ import unicodedata
 
 import openpyxl
 
+import absence_notice
 from Chrome.KosenWeb import KosenWeb, LoginRequired
 from Chrome.Sakura import Sakura
 from paths import onedrive_dir
@@ -65,6 +69,8 @@ SCHEDULE_GLOB = os.path.join('data', '*行事予定*.xlsx')
 SENT_LOG = ('Work', '講義', 'そのた科目', 'class_absence_sent.csv')
 SENT_LOG_HEADER = ['日付', '出席番号', '欠課', '結果', '記録日時']
 RESULT_SENT, RESULT_SKIPPED, RESULT_DONE = '送信', '送らず', '完了'
+#サイボウズに欠席連絡がある(-x で除外した)ので連絡不要
+RESULT_EXCLUDED = '欠席連絡あり'
 USER_DATA_PATH = os.path.join(os.path.expanduser('~'), 'AppData', 'Local', 'Google', 'Chrome', 'AutoSyncData')
 
 
@@ -306,6 +312,7 @@ def main():
                         help='対象日 MMDD(今年) または YYYY-MM-DD。省略時は行事予定から求めた前回の授業日')
     parser.add_argument('--force', action='store_true',
                         help='完了済みの日でも実行し、「送らず」にした学生も聞き直す(送信済みの学生は常に飛ばす)')
+    absence_notice.add_argument(parser)
     parser.add_argument('--inspect', action='store_true', help='出力ファイルの構造だけ表示して終わる')
     parser.add_argument('--list-days', action='store_true', help='行事予定から求めた授業日の一覧を表示して終わる')
     parser.add_argument('--show', action='store_true', help='KOSEN WEB の取得もヘッドレスにせず画面を出して行う')
@@ -364,7 +371,11 @@ def main():
     print("時限:", ' / '.join(f"{p}限 {n}" for _, p, n in lessons))
     targets, all_absent, none_absent = find_targets(rows, lessons)
     print(f"授業 {len(lessons)} コマ / 全時限欠課 {all_absent} 名(除外) / 欠課なし {none_absent} 名(除外) / 対象 {len(targets)} 名")
-    handled = {RESULT_SENT} if args.force else {RESULT_SENT, RESULT_SKIPPED}
+    targets, excluded = absence_notice.split(targets, absence_notice.excluded(args), number=lambda t: t[1])
+    for _, number, _, absent in excluded:
+        if sent.get(number) not in (RESULT_SENT, RESULT_EXCLUDED):
+            append_sent_log(date, number, format_lessons(absent), RESULT_EXCLUDED)
+    handled = {RESULT_SENT} if args.force else {RESULT_SENT, RESULT_SKIPPED, RESULT_EXCLUDED}
     remaining = [t for t in targets if sent.get(t[1]) not in handled]
     if len(remaining) < len(targets):
         print(f"記録済みの {len(targets) - len(remaining)} 名を飛ばします(残り {len(remaining)} 名)。")
