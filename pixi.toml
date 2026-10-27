@@ -18,3 +18,8 @@ requests = "*"
 icalendar = "*"
 python-dateutil = "*"
 keyring = "*"
+pywin32 = ">=312,<313"
+
+[tasks]
+# pixi run shr [MMDD]  (例: pixi run shr 1027。省略時は今日)
+shr = "python shr_absence_sakura.py"

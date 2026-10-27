@@ -20,7 +20,7 @@ python ScheduleSync.py  # run schedule sync
 
 - **Schedule sync** (main use case): `python ScheduleSync.py`
 - **Sakura messaging**: `python makemail_sakura.py`
-- **SHR欠席者へのさくら連絡網**: `python shr_absence_sakura.py [YYYY-MM-DD]`（送信確認画面で止まる）
+- **SHR欠席者へのさくら連絡網**: `pixi run shr [MMDD]`（`python shr_absence_sakura.py [MMDD|YYYY-MM-DD]` と同じ）（送信確認画面で止まる）
 - Individual modules can be run directly (each has `if __name__ == "__main__"` blocks with hardcoded user paths)
 
 Scripts require Chrome to be installed and not running — `Browser.__init__` kills all Chrome processes before launching.
@@ -137,6 +137,8 @@ Locating the search-result row must **not** be a bare `By.PARTIAL_LINK_TEXT` on 
 
 - **SHR.xlsx・さくらの受信者一覧・サイボウズの欠席連絡は個人情報。氏名をログや画面出力に出さないこと**（件数と出席番号だけを出す）。さくらの宛先ページのスクリーンショットも撮らない。調査は JS で件数や属性名、文字種の統計だけを取って行った。
 - 点呼簿は **199行目が日付**（`=B2` 等）、**200〜245行目が「出席番号_苗字　名前」**（不在でなければ空文字）。どちらも数式なので `openpyxl` の `data_only=True` で読むのはキャッシュ値で、Excel で開いて保存していない日付は存在しない。
+- Excel で開いている（OneDrive 自動保存）と SHR.xlsx がロックされ `openpyxl` は `PermissionError` になる。その場合は起動中の Excel から COM（`pywin32`）で同じ範囲を読む（計算済みの現在値なので保存不要）。ブックの `FullName` は OneDrive の URL になりうるのでブック名で照合している。
+- 職場の OneDrive の場所は PC で違う（本番PCは `D:\`）ので、パスは環境変数 `OneDriveCommercial` から組み立てる。
 - さくらの受信者 `data-name` は「苗字　名前(〇〇3〇)」と**末尾にクラスの括弧書きが付く**ため、Excel の氏名と完全一致しない。`Chrome.Sakura.normalize_name()` で括弧書きと空白を落として照合する（2026-10 の実データで9/28〜10/5の4日分が全件一致、過去の送信件数とも一致）。
 - 画面操作はボタンの位置ではなく、`onclick` に書かれた JS を直接呼ぶ: `Worker.OpenResult(No)` → `ResultWorker.CopyDist()`（confirm と完了 alert が続けて出る）→ `OpenDistEdit_Update(No)` → `MsgEditWorker.MessageNextPage()` → `OpenSubModal('screen-send-select')` → `DefineSendSelect(DIST_SEND_SELECT_TYPE.ACCOUNT)` → `OpenAccountAddModal(MsgEditWorker.LvSendAccount)` → `#cmbAccountSearchAff` で学年クラスを選択 → `#lstAccountAdd` のチェックボックス → `DefineAccountAddModal()` → `DefineSendDetail()`。学年クラスには同名の「（保護者）」グループもあるので、表示名の完全一致で選ぶ。
 - 編集ダイアログの `txtSubject` は `MsgEditWorker` の初期化より先に表示されるので、件名の値が入るまで待ってから操作する（待たないと `MsgEditWorker` が null で落ちる）。

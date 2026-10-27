@@ -86,6 +86,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-xlib-0.33-pyhff2d567_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python_abi-3.14-8_cp314.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pytweening-1.2.0-pyhd8ed1ab_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/pywin32-312-py314hf700ef7_2.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pywin32-ctypes-0.2.3-py314h86ab7b2_4.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/requests-2.33.1-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/rubicon-objc-0.5.3-pyhcf101f3_0.conda
@@ -1121,6 +1122,19 @@ packages:
   license_family: BSD
   size: 13569
   timestamp: 1735140119516
+- conda: https://conda.anaconda.org/conda-forge/win-64/pywin32-312-py314hf700ef7_2.conda
+  sha256: d41aeb9004cdd408cb1a3e381a9d687a9f6bf2b128757bad182ecd782de8f07b
+  md5: 9857b7fee277b536d66781180d3b2204
+  depends:
+  - python
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
+  - python_abi 3.14.* *_cp314
+  license: PSF-2.0
+  license_family: PSF
+  size: 4473422
+  timestamp: 1789685721822
 - conda: https://conda.anaconda.org/conda-forge/win-64/pywin32-ctypes-0.2.3-py314h86ab7b2_4.conda
   sha256: 36a483fe6cfc39af48bd70f7048b54a3ddb9025143fb9953c97138e7dc823e9c
   md5: 202999e164caa1307ba59db8f071a88f
