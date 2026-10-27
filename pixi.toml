@@ -23,3 +23,5 @@ pywin32 = ">=312,<313"
 [tasks]
 # pixi run shr [MMDD]  (例: pixi run shr 1027。省略時は今日)
 shr = "python shr_absence_sakura.py"
+# pixi run absence [MMDD]  (省略時は行事予定から求めた前回の授業日)
+absence = "python class_absence_sakura.py"

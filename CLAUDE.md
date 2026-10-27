@@ -21,6 +21,7 @@ python ScheduleSync.py  # run schedule sync
 - **Schedule sync** (main use case): `python ScheduleSync.py`
 - **Sakura messaging**: `python makemail_sakura.py`
 - **SHR欠席者へのさくら連絡網**: `pixi run shr [MMDD]`（`python shr_absence_sakura.py [MMDD|YYYY-MM-DD]` と同じ）（送信確認画面で止まる）
+- **授業欠課者へのさくら連絡網**: `pixi run absence [MMDD]`（`python class_absence_sakura.py`。`--inspect` で出力ファイルの構造確認）（学生ごとに送信確認画面で止まる）
 - Individual modules can be run directly (each has `if __name__ == "__main__"` blocks with hardcoded user paths)
 
 Scripts require Chrome to be installed and not running — `Browser.__init__` kills all Chrome processes before launching.
@@ -145,6 +146,18 @@ Locating the search-result row must **not** be a bare `By.PARTIAL_LINK_TEXT` on 
 - 編集ダイアログの `txtSubject` は `MsgEditWorker` の初期化より先に表示されるので、件名の値が入るまで待ってから操作する（待たないと `MsgEditWorker` が null で落ちる）。
 - `AutoSyncData` プロファイルにはさくらのパスワードが保存されていないため、`Sakura.login()` は自動入力が無ければ手動ログインを待つ。開発時は `--remote-debugging-port=9333` で起動した Chrome に `--debugger-address 127.0.0.1:9333` で接続すれば、ログインし直さずに済む。
 - Garoon の「学生欠席等連絡」カレンダーとの照合（欠席連絡済みの学生を宛先から除外）は未実装。`docs/backlog_garoon.md` の4。
+
+### 授業欠課者へのさくら連絡網（`class_absence_sakura.py`）
+
+丸一日ではなく一部の授業だけ欠課した学生に、学務係への事前連絡を促すメッセージを1人ずつ送る準備をする。`pixi run absence [MMDD]`。日付省略時は行事予定から前回の授業日を求め、`data/class_absence_done.json` に記録済み（＝対応済み）の日なら何もせず終わる（`--force` でやり直し）。学生ごとに送信確認画面で止まり、**送信はユーザーが押す**。Enter で次へ、`s` で送らずに次へ、`q` で中断（中断した日は対応済みにしない）。
+
+- **KOSEN WEB の出力ファイルは個人情報。Claude は中身を見ないこと**（ユーザーの指示）。出力は `tempfile.mkdtemp()` の一時フォルダに保存し（CDP `Browser.setDownloadBehavior` で切り替え、`data/` には落とさない）、読み終えたらすぐ消す。構造の確認は `--inspect`（見出し2行・授業列・出欠記号の件数だけ表示）で行う。
+- 列位置はユーザー指定: B列=氏名、I列以降=その日の各時限（最大8）、2行目=授業名。欠課の記号は `欠`。**全時限が欠（＝丸一日欠席、SHR 側で対応）と欠が無い学生は除外**。同じ授業の連続時限は「1・2限 科目名」にまとめる。2026-10-27 時点で実ファイルでの通し確認は未実施なので、初回は `--inspect` で列位置が仕様どおりか確かめること。
+- 行事予定は `data/*行事予定*.xlsx`（最新のもの）。月ブロックが横に並び、2行目の「N月」の列が曜、3行目でその右の「高松」列のさらに右隣が授業週番号（授業日は数字、試験・行事日は「〇」、休日は空欄）。日 d は d+3 行目。曜の列と実際の曜日を照合して、形が変わったら例外にしている。年度はファイル名の「令和N年度」から。
+- KOSEN WEB（`Chrome/KosenWeb.py`）: 「日別出欠の閲覧（期間指定）」は `/kosen-web/wku0121/index/31/31-W-6-3-7`。項目は `#vi-con-nendo` / `#vi-con-datefrom`・`#vi-con-dateto`（`YYYY/MM/DD`、jQuery datepicker）/ `#vi-drp-years`（`3年`）/ `#vi-drp-classex`（`機械工学科`。「機械工学科（旧）」があるので完全一致）/ `#vi-btn-output`（JSON を POST してファイルが返る。`<form>` は無い）。ログインフォームは `#LoginID` / `#Password`。初回はパスワードが保存されていないので手動ログインを待つ。
+- さくら連絡網は新規作成（`Sakura.new_message()`: `OpenDistEdit_New()` → `MsgEditWorker.DefineMessageType(DIST_MESSAGE_TYPE.MESSAGE)`）。本文は Quill エディタ（`MsgEditWorker.Editor.setText()`。「文字装飾OFF」時のみ `#txtaBody`）。宛先は SHR と同じ `set_recipients()`。送信確認画面で `Sakura.set_insert_recipient_name()` が `MsgEditWorker.OpenOptionDialog()` → `#rdoInsertAccountName_ON` → `DefineOptionDialog()` で「受信者氏名を差し込む」を「する」にする。
+- KOSEN WEB とさくら連絡網は同じ Chrome を使う（`Browser.share_driver()`）。`--debugger-address` は `Browser.__init__` に移した（以前は `Sakura` 独自）。
+- Garoon の「学生欠席等連絡」との照合は未実装（`docs/backlog_garoon.md` の4と同じ）。
 
 ### File locations
 

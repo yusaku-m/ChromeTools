@@ -15,9 +15,18 @@ class DatabaseBusyError(Exception):
 
 class Browser:
     """ブラウザ操作クラス"""
-    def __init__(self, userdata_path):
+    def __init__(self, userdata_path, debugger_address=None):
         # 初期設定
         self.userdata_path = userdata_path
+        if debugger_address:
+            #開発用: --remote-debugging-port で起動済みのChromeに接続する。
+            #ログインを毎回やり直さずに済む。
+            options = webdriver.ChromeOptions()
+            options.debugger_address = debugger_address
+            self.driver = webdriver.Chrome(options=options)
+            self.driver.implicitly_wait(10)
+            return
+
         print("1. Terminating existing Chrome processes...")
         self.terminate_chrome_processes()
 
@@ -79,6 +88,17 @@ class Browser:
 
         self.driver.set_page_load_timeout(120)
         self.driver.implicitly_wait(10)
+
+    @classmethod
+    def share_driver(cls, other):
+        """other(Browser)が起動済みの Chrome をそのまま使うインスタンスを作る。
+        __init__ は呼ばないので、ログイン等の初期処理は呼び出し側で行うこと。"""
+        obj = cls.__new__(cls)
+        obj.userdata_path = other.userdata_path
+        obj.driver = other.driver
+        if hasattr(other, 'status'):
+            obj.status = other.status
+        return obj
 
     def terminate_chrome_processes(self):
         """自動化プロファイルを使用しているChromeプロセスのみ終了させる"""

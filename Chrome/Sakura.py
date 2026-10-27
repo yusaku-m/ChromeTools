@@ -1,5 +1,4 @@
 from .Browser import Browser
-from selenium import webdriver
 from selenium.common.exceptions import NoAlertPresentException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.select import Select
@@ -26,16 +25,7 @@ def normalize_name(name):
 
 class Sakura(Browser):
     def __init__(self, userdata_path, debugger_address=None):
-        if debugger_address:
-            #開発用: --remote-debugging-port で起動済みのChromeに接続する。
-            #さくら連絡網のログインを毎回やり直さずに済む。
-            options = webdriver.ChromeOptions()
-            options.debugger_address = debugger_address
-            self.userdata_path = userdata_path
-            self.driver = webdriver.Chrome(options=options)
-            self.driver.implicitly_wait(10)
-        else:
-            super().__init__(userdata_path)
+        super().__init__(userdata_path, debugger_address)
         self.login()
 
     def login(self):
@@ -163,6 +153,34 @@ class Sakura(Browser):
         self._accept_alerts(timeout=2)
         self._wait_js("return [...document.querySelectorAll('.send-select-button')].some(e => e.offsetParent)")
 
+    def new_message(self, subject, body):
+        """メッセージを新規作成して件名と本文を入れ、宛先ページへ進む。
+
+        本文エディタは Quill(MsgEditWorker.Editor)。「文字装飾OFF」のときだけ
+        textarea(txtaBody)が使われるので、両方に対応する。
+        """
+        self.driver.get(MAIN_URL)
+        self._wait_js("return typeof OpenDistEdit_New === 'function'")
+        self.driver.execute_script("OpenDistEdit_New();")
+        #種別選択(メッセージ/アンケート/安否確認)のボタンが出るまで待つ
+        self._wait_js("return [...document.querySelectorAll('[onclick]')].some(e => e.offsetParent && "
+                      "(e.getAttribute('onclick')||'').includes('DefineMessageType(DIST_MESSAGE_TYPE.MESSAGE)'))")
+        self.driver.execute_script("MsgEditWorker.DefineMessageType(DIST_MESSAGE_TYPE.MESSAGE);")
+        self._wait_js("const e=document.getElementById('txtSubject');"
+                      "return MsgEditWorker && MsgEditWorker.Editor && e && e.offsetParent !== null")
+        box = self.driver.find_element(By.ID, 'txtSubject')
+        box.clear()
+        box.send_keys(subject)
+        self.driver.execute_script("""
+            if (MsgEditWorker.UseNormalEditor) {
+                document.getElementById('txtaBody').value = arguments[0];
+            } else {
+                MsgEditWorker.Editor.setText(arguments[0]);
+            }""", body)
+        self.driver.execute_script("MsgEditWorker.MessageNextPage();")
+        self._accept_alerts(timeout=2)
+        self._wait_js("return [...document.querySelectorAll('.send-select-button')].some(e => e.offsetParent)")
+
     def set_recipients(self, names, affiliation):
         """宛先を「個人から選ぶ」で names(氏名のリスト)に差し替える。
 
@@ -232,6 +250,18 @@ class Sakura(Browser):
         """宛先ページの「次へ」。この先の送信はユーザーが手で行う。"""
         self.driver.execute_script("MsgEditWorker.DefineSendDetail();")
         return self._accept_alerts(timeout=3)
+
+    def set_insert_recipient_name(self):
+        """送信確認画面の「設定」で「受信者氏名を差し込む」を「する」にする。
+        go_send_detail() の後に呼ぶ。"""
+        self._wait_js("return typeof MsgEditWorker.OpenOptionDialog === 'function'")
+        self.driver.execute_script("MsgEditWorker.OpenOptionDialog();")
+        self._wait_js("return !!document.getElementById('rdoInsertAccountName_ON')")
+        self.driver.execute_script("document.getElementById('rdoInsertAccountName_ON').click();")
+        if not self.driver.execute_script("return document.getElementById('rdoInsertAccountName_ON').checked"):
+            raise RuntimeError("「受信者氏名を差し込む」を「する」にできませんでした")
+        self.driver.execute_script("MsgEditWorker.DefineOptionDialog();")
+        return self._accept_alerts(timeout=2)
 
 
 class Message():
