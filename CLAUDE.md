@@ -141,6 +141,7 @@ Locating the search-result row must **not** be a bare `By.PARTIAL_LINK_TEXT` on 
 - 職場の OneDrive の場所は PC で違う（本番PCは `D:\`）ので、パスは環境変数 `OneDriveCommercial` から組み立てる。
 - さくらの受信者 `data-name` は「苗字　名前(〇〇3〇)」と**末尾にクラスの括弧書きが付く**ため、Excel の氏名と完全一致しない。`Chrome.Sakura.normalize_name()` で括弧書きと空白を落として照合する（2026-10 の実データで9/28〜10/5の4日分が全件一致、過去の送信件数とも一致）。
 - 画面操作はボタンの位置ではなく、`onclick` に書かれた JS を直接呼ぶ: `Worker.OpenResult(No)` → `ResultWorker.CopyDist()`（confirm と完了 alert が続けて出る）→ `OpenDistEdit_Update(No)` → `MsgEditWorker.MessageNextPage()` → `OpenSubModal('screen-send-select')` → `DefineSendSelect(DIST_SEND_SELECT_TYPE.ACCOUNT)` → `OpenAccountAddModal(MsgEditWorker.LvSendAccount)` → `#cmbAccountSearchAff` で学年クラスを選択 → `#lstAccountAdd` のチェックボックス → `DefineAccountAddModal()` → `DefineSendDetail()`。学年クラスには同名の「（保護者）」グループもあるので、表示名の完全一致で選ぶ。
+- コピー元が「個人から選ぶ」で宛先を入れたメール（＝このスクリプトで送ったもの）だと、コピーした下書きに個人の宛先一覧がそのまま残る（Excel 取込で宛先を入れたメールからのコピーでは残らない）。`set_recipients()` は追加前に `MsgEditWorker.LvSendAccount.Clear()` で空にする。
 - 編集ダイアログの `txtSubject` は `MsgEditWorker` の初期化より先に表示されるので、件名の値が入るまで待ってから操作する（待たないと `MsgEditWorker` が null で落ちる）。
 - `AutoSyncData` プロファイルにはさくらのパスワードが保存されていないため、`Sakura.login()` は自動入力が無ければ手動ログインを待つ。開発時は `--remote-debugging-port=9333` で起動した Chrome に `--debugger-address 127.0.0.1:9333` で接続すれば、ログインし直さずに済む。
 - Garoon の「学生欠席等連絡」カレンダーとの照合（欠席連絡済みの学生を宛先から除外）は未実装。`docs/backlog_garoon.md` の4。

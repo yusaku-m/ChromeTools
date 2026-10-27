@@ -46,9 +46,16 @@ class Sakura(Browser):
             return
         self.driver.get(LOGIN_URL)
         self.wait_element((By.CLASS_NAME, 'work_btn'))
-        time.sleep(1)
-        filled = self.driver.execute_script(
-            "const p=document.querySelector('input[type=password]');return !!(p && p.value)")
+        #Chrome は自動入力したパスワードを、ユーザー操作があるまでページの JS に見せない
+        #(value が空文字のまま)。自動入力済みかどうかは :-webkit-autofill で判定する。
+        filled = False
+        for _ in range(10):
+            time.sleep(0.5)
+            filled = self.driver.execute_script(
+                "const p=document.querySelector('input[type=password]');"
+                "return !!(p && (p.value || p.matches(':-webkit-autofill')))")
+            if filled:
+                break
         if filled:
             self.driver.find_element(By.CLASS_NAME, 'work_btn').click()
         else:
@@ -170,10 +177,13 @@ class Sakura(Browser):
         self.driver.execute_script("MsgEditWorker.DefineSendSelect(DIST_SEND_SELECT_TYPE.ACCOUNT);")
         self._wait_js("const e=document.getElementById('lvSendAccount');return !!e")
 
-        #コピー元の宛先が残っていれば消す(2026-10 時点では引き継がれないが念のため)
+        #コピー元の宛先を消す。Excel 取込で宛先を入れたメールからのコピーでは引き継がれないが、
+        #「個人から選ぶ」で宛先を入れたメール(=このスクリプトで送ったもの)からのコピーでは
+        #個人の宛先一覧がそのまま残る。
+        self.driver.execute_script("MsgEditWorker.LvSendAccount.Clear();")
         existing = self.driver.execute_script("return document.querySelectorAll('#lvSendAccount > li').length")
         if existing:
-            raise RuntimeError(f"宛先一覧に既に {existing} 件入っています。手動で削除してから再実行してください。")
+            raise RuntimeError(f"宛先一覧を消せませんでした(残り {existing} 件)。手動で削除してから再実行してください。")
 
         self.driver.execute_script("MsgEditWorker.OpenAccountAddModal(MsgEditWorker.LvSendAccount);")
         self._wait_js("const e=document.getElementById('cmbAccountSearchAff');return e && e.offsetParent !== null")
