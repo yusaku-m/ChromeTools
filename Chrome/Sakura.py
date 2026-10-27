@@ -159,6 +159,9 @@ class Sakura(Browser):
         本文エディタは Quill(MsgEditWorker.Editor)。「文字装飾OFF」のときだけ
         textarea(txtaBody)が使われるので、両方に対応する。
         """
+        #直前にユーザーが送信した後の「メッセージの登録が完了しました。」が残っていると
+        #driver.get が UnexpectedAlertPresentException になるので閉じておく
+        self._accept_alerts(timeout=1)
         self.driver.get(MAIN_URL)
         self._wait_js("return typeof OpenDistEdit_New === 'function'")
         self.driver.execute_script("OpenDistEdit_New();")
@@ -179,7 +182,13 @@ class Sakura(Browser):
             }""", body)
         self.driver.execute_script("MsgEditWorker.MessageNextPage();")
         self._accept_alerts(timeout=2)
-        self._wait_js("return [...document.querySelectorAll('.send-select-button')].some(e => e.offsetParent)")
+        #新規作成では宛先ページを経ずに「宛先の選び方を選択してください」画面が直接開く
+        self._wait_js(f"return {self._SEND_SELECT_SHOWN_JS}")
+
+    #「宛先の選び方」画面(個人から選ぶ/グループから選ぶ等)が表示されているか
+    _SEND_SELECT_SHOWN_JS = ("(!!(document.getElementById('screen-send-select')||{}).offsetParent || "
+                             "[...document.querySelectorAll('[onclick]')].some(e => e.offsetParent && "
+                             "(e.getAttribute('onclick')||'').includes('DefineSendSelect(')))")
 
     def set_recipients(self, names, affiliation):
         """宛先を「個人から選ぶ」で names(氏名のリスト)に差し替える。
@@ -190,7 +199,9 @@ class Sakura(Browser):
         照合できなかった氏名は names 内の位置(0始まり)のリストで返す。
         氏名は個人情報なので、ログには件数と位置しか出さないこと。
         """
-        self.driver.execute_script("MsgEditWorker.OpenSubModal('screen-send-select');")
+        if not self.driver.execute_script(f"return {self._SEND_SELECT_SHOWN_JS}"):
+            #コピーした下書きは宛先ページから「宛先の選び方」画面を開く。新規作成では既に開いている
+            self.driver.execute_script("MsgEditWorker.OpenSubModal('screen-send-select');")
         self._wait_js("return typeof DIST_SEND_SELECT_TYPE !== 'undefined'")
         self.driver.execute_script("MsgEditWorker.DefineSendSelect(DIST_SEND_SELECT_TYPE.ACCOUNT);")
         self._wait_js("const e=document.getElementById('lvSendAccount');return !!e")
@@ -228,6 +239,12 @@ class Sakura(Browser):
             else:
                 unmatched.append(i)
 
+        if not values:
+            #誰も照合できなければ追加しない(宛先0件のまま確定すると一覧が空で待ち続ける)。
+            #このダイアログは次の new_message() でページごと開き直すので閉じなくてよい
+            print(f"   受信者一覧({len(candidates)} 名)に一致する氏名がありませんでした")
+            return unmatched
+
         checked = self.driver.execute_script("""
             const want = new Set(arguments[0]); let n = 0;
             for (const c of document.querySelectorAll('#lstAccountAdd input[type=checkbox]')) {
@@ -250,6 +267,35 @@ class Sakura(Browser):
         """宛先ページの「次へ」。この先の送信はユーザーが手で行う。"""
         self.driver.execute_script("MsgEditWorker.DefineSendDetail();")
         return self._accept_alerts(timeout=3)
+
+    #ユーザーが送信ボタンを押した後に出るネイティブ alert(2026-10 実機)
+    SENT_ALERT = 'メッセージの登録が完了しました'
+
+    def wait_for_send(self, keys='sq'):
+        """送信確認画面で、ユーザーがブラウザで送信するか、コンソールでキーを押すのを待つ。
+
+        送信完了の alert を検知したら閉じて 'sent' を返す。keys のどれかが押されたらその文字を返す。
+        Enter を「送信した」とみなすと、送信できていないのに送信済みと記録してしまうため
+        (2026-10-27 に実際に起きた)、完了の alert でだけ送信と判定する。
+        それ以外の alert(送信前の確認等)はユーザーが操作するものなので触らない。
+        """
+        import msvcrt
+        while msvcrt.kbhit():
+            msvcrt.getwch()
+        while True:
+            try:
+                alert = self.driver.switch_to.alert
+                if self.SENT_ALERT in alert.text:
+                    alert.accept()
+                    return 'sent'
+            except NoAlertPresentException:
+                pass
+            if msvcrt.kbhit():
+                key = msvcrt.getwch().lower()
+                if key in keys:
+                    print(key)
+                    return key
+            time.sleep(0.3)
 
     def set_insert_recipient_name(self):
         """送信確認画面の「設定」で「受信者氏名を差し込む」を「する」にする。

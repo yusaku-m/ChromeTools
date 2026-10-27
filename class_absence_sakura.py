@@ -11,8 +11,12 @@ KOSEN WEB からの取得はヘッドレスで行う。ログインしていな�
 1. 行事予定(data/*行事予定*.xlsx)から前回の授業日を求める。対応済みの日なら終了
 2. KOSEN WEB「日別出欠の閲覧（期間指定）」でその日の 3年・機械工学科 を出力
 3. 全時限欠課(=丸一日欠席。SHR 側で連絡済み)と欠課なしを除き、残りの学生ごとに欠課した時限を集める
-4. 学生ごとにさくら連絡網のメッセージを新規作成し(受信者氏名を差し込む)、送信確認画面で止まる。
-   **送信ボタンはユーザーが押す。** Enter で次の学生へ進む。
+4. 欠課の内容が同じ学生ごとに(まったく同じなら1通に複数宛先で)さくら連絡網のメッセージを新規作成し
+   (受信者氏名を差し込む)、送信確認画面で止まる。**送信ボタンはユーザーが押す。** Enter で次へ進む。
+
+送信したかどうかは日付・出席番号ごとに OneDrive の Work/講義/そのた科目/class_absence_sent.csv に
+記録する(SENT_LOG。どの PC から実行しても共有される)。送信済みの学生はやり直しても飛ばし、
+最後まで終えた日には「完了」の行を書いて、次からその日は何もしない。氏名は書かない。
 
 出力ファイルと氏名は個人情報なので、画面にもログにも出さない(件数・出席番号・時限だけ出す)。
 出力ファイルは一時フォルダに保存し、読み終えたらすぐ消す。
@@ -24,7 +28,6 @@ import argparse
 import csv
 import datetime
 import glob
-import json
 import os
 import re
 import shutil
@@ -36,6 +39,8 @@ import openpyxl
 
 from Chrome.KosenWeb import KosenWeb, LoginRequired
 from Chrome.Sakura import Sakura
+from paths import onedrive_dir
+from sakura_names import ask_aliases, to_sakura_names
 
 GRADE = '3年'
 DEPARTMENT = '機械工学科'
@@ -48,15 +53,18 @@ BODY = """機械工学科３年生担任の前田です。
 欠席がお分かりの場合は，必ず学務係への事前連絡をお願いいたします。
 以上よろしくお願いいたします。"""
 
-#出力ファイルの列位置(ユーザー指定)。B列=氏名、I列以降=その日の各時限(最大8列)、2行目=授業名
+#出力ファイルの列位置(ユーザー指定)。B列=氏名、I列以降=その日の各授業(1行目=時限、2行目=授業名)
 NAME_COL = 1
 FIRST_LESSON_COL = 8
-MAX_LESSONS = 8
 LESSON_NAME_ROW = 1
 ABSENT_MARK = '欠'
+#授業が無かったことを表す値。丸一日欠席の判定でその時限を数えない(空欄は出席)
+NO_CLASS_MARKS = {'休講'}
 
 SCHEDULE_GLOB = os.path.join('data', '*行事予定*.xlsx')
-DONE_FILE = os.path.join('data', 'class_absence_done.json')
+SENT_LOG = ('Work', '講義', 'そのた科目', 'class_absence_sent.csv')
+SENT_LOG_HEADER = ['日付', '出席番号', '欠課', '結果', '記録日時']
+RESULT_SENT, RESULT_SKIPPED, RESULT_DONE = '送信', '送らず', '完了'
 USER_DATA_PATH = os.path.join(os.path.expanduser('~'), 'AppData', 'Local', 'Google', 'Chrome', 'AutoSyncData')
 
 
@@ -117,20 +125,45 @@ def find_schedule_file():
 
 
 # ----------------------------------------------------------------------
-# 対応済みの日
+# 送信記録(OneDrive。日付・出席番号ごと)
 # ----------------------------------------------------------------------
-def load_done():
+def sent_log_path():
+    return onedrive_dir(*SENT_LOG)
+
+
+def load_sent_log(date):
+    """その日の記録を {出席番号: 結果} と「完了」の有無で返す。後の行ほど新しい。"""
+    results, done = {}, False
     try:
-        with open(DONE_FILE, encoding='utf-8') as f:
-            return set(json.load(f))
+        with open(sent_log_path(), encoding='utf-8-sig', newline='') as f:
+            for row in csv.DictReader(f):
+                if row['日付'] != date.isoformat():
+                    continue
+                if row['結果'] == RESULT_DONE:
+                    done = True
+                else:
+                    results[row['出席番号']] = row['結果']
     except FileNotFoundError:
-        return set()
+        pass
+    return results, done
 
 
-def mark_done(date):
-    done = load_done() | {date.isoformat()}
-    with open(DONE_FILE, 'w', encoding='utf-8') as f:
-        json.dump(sorted(done), f)
+def append_sent_log(date, number, lessons_text, result):
+    """1行追記する。Excel で開いているとロックされて書けないので、閉じてもらって再試行する。"""
+    path = sent_log_path()
+    row = [date.isoformat(), number, lessons_text, result, datetime.datetime.now().isoformat(timespec='seconds')]
+    while True:
+        try:
+            new = not os.path.exists(path)
+            #Excel で文字化けしないよう BOM 付き UTF-8(先頭に書くときだけ BOM が付く)
+            with open(path, 'a', encoding='utf-8-sig' if new else 'utf-8', newline='') as f:
+                writer = csv.writer(f)
+                if new:
+                    writer.writerow(SENT_LOG_HEADER)
+                writer.writerow(row)
+            return
+        except PermissionError:
+            input(f"  送信記録に書き込めません(Excel で開いていれば閉じてください): {path}\n  Enter で再試行: ")
 
 
 # ----------------------------------------------------------------------
@@ -142,7 +175,14 @@ def read_table(path):
         #read_only=True だとファイルに書かれた <dimension> の範囲しか読まない。KOSEN WEB の出力は
         #それが実データより狭く、右側の列が欠けるので通常モードで読む(ファイルは小さい)
         ws = openpyxl.load_workbook(path, data_only=True).worksheets[0]
-        return [['' if v is None else str(v) for v in row] for row in ws.iter_rows(values_only=True)]
+        rows = [['' if v is None else str(v) for v in row] for row in ws.iter_rows(values_only=True)]
+        #結合セルは左上にしか値が無いので、範囲全体に広げる(同じ時限に複数授業があると時限の見出しが結合される)
+        for merged in ws.merged_cells.ranges:
+            value = rows[merged.min_row - 1][merged.min_col - 1]
+            for r in range(merged.min_row - 1, merged.max_row):
+                for c in range(merged.min_col - 1, merged.max_col):
+                    rows[r][c] = value
+        return rows
     for encoding in ('utf-8-sig', 'cp932'):
         try:
             with open(path, encoding=encoding, newline='') as f:
@@ -159,17 +199,45 @@ def _cell(row, col):
 def lesson_columns(rows):
     """[(列, 時限, 授業名), ...]。授業名(2行目)が空の列は含めない。
 
-    時限は1行目の見出しに「N限」があればそれを使い、無ければ I 列=1限として列位置から決める。
+    時限は1行目の見出しの数値。同じ時限に複数の授業がある(選択科目等)ので、列の位置からは決めない。
+    見出しに数値が無い列があれば、推測せずに例外にする。
     """
     result = []
-    for i in range(MAX_LESSONS):
-        col = FIRST_LESSON_COL + i
+    col = FIRST_LESSON_COL
+    #時限が重複しうるので、列は「最大8コマ」ではなく見出しが続く限り読む
+    while col < max(len(rows[0]), len(rows[LESSON_NAME_ROW])):
         name = _cell(rows[LESSON_NAME_ROW], col)
-        if not name:
-            continue
-        m = re.search(r'(\d+)\s*限', _cell(rows[0], col) + ' ' + name)
-        result.append((col, int(m.group(1)) if m else i + 1, name))
+        header = _cell(rows[0], col)
+        if not name and not header:
+            break
+        if name:
+            period = _period(header)
+            if period is None:
+                raise ValueError(f"{_col_letter(col)}列の1行目から時限を読めません({header!r})。--inspect で構造を確認してください")
+            result.append((col, period, name))
+        col += 1
     return result
+
+
+def _period(header):
+    """見出しから時限を返す。KOSEN WEB の見出しは「2026/10/23 1」(日付 時限)。
+    先頭の日付を除いたうえで「N限」「N時限」か数値だけのときに限り時限とみなし、それ以外は None。"""
+    header = re.sub(r'^\d{4}[/-]\d{1,2}[/-]\d{1,2}(?:\s*\(.\))?\s*', '', header)
+    m = re.search(r'(\d+)\s*時?限', header)
+    if not m:
+        m = re.fullmatch(r'(\d+)(?:\.0)?', header)
+    if not m or not 1 <= int(m.group(1)) <= 10:
+        return None
+    return int(m.group(1))
+
+
+def _col_letter(col):
+    letters = ''
+    col += 1
+    while col:
+        col, r = divmod(col - 1, 26)
+        letters = chr(ord('A') + r) + letters
+    return letters
 
 
 def find_targets(rows, lessons):
@@ -180,10 +248,12 @@ def find_targets(rows, lessons):
         name = _cell(row, NAME_COL)
         if not name:
             continue
-        absent = [(period, lesson) for col, period, lesson in lessons if _cell(row, col) == ABSENT_MARK]
+        absent = sorted({(period, lesson) for col, period, lesson in lessons if _cell(row, col) == ABSENT_MARK})
         if not absent:
             none_absent += 1
-        elif len(absent) == len(lessons):
+        #休講の列には欠が付かないので、休講以外の列がすべて欠なら丸一日欠席とみなす
+        elif all(_cell(row, col) == ABSENT_MARK for col, _, _ in lessons
+                 if _cell(row, col) not in NO_CLASS_MARKS):
             all_absent += 1
         else:
             targets.append((r, _cell(row, 0), name, absent))
@@ -195,7 +265,7 @@ def inspect(rows, lessons):
     print(f"行数: {len(rows)} / 列数: {max((len(r) for r in rows), default=0)}")
     for i in range(min(2, len(rows))):
         print(f"{i + 1}行目: {rows[i]}")
-    print("授業の列:", [(chr(ord('A') + c), p, n) for c, p, n in lessons])
+    print("授業の列:", [(_col_letter(c), p, n) for c, p, n in lessons])
     marks = {}
     for row in rows[LESSON_NAME_ROW + 1:]:
         if _cell(row, NAME_COL):
@@ -234,7 +304,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('date', nargs='?', type=parse_date,
                         help='対象日 MMDD(今年) または YYYY-MM-DD。省略時は行事予定から求めた前回の授業日')
-    parser.add_argument('--force', action='store_true', help='対応済みの日でも実行する')
+    parser.add_argument('--force', action='store_true',
+                        help='完了済みの日でも実行し、「送らず」にした学生も聞き直す(送信済みの学生は常に飛ばす)')
     parser.add_argument('--inspect', action='store_true', help='出力ファイルの構造だけ表示して終わる')
     parser.add_argument('--list-days', action='store_true', help='行事予定から求めた授業日の一覧を表示して終わる')
     parser.add_argument('--show', action='store_true', help='KOSEN WEB の取得もヘッドレスにせず画面を出して行う')
@@ -257,7 +328,8 @@ def main():
         date = previous_class_day(datetime.date.today(), load_class_days(schedule))
         print(f"行事予定: {os.path.basename(schedule)}")
     print(f"対象日: {date} ({WEEKDAYS[date.weekday()]})")
-    if date.isoformat() in load_done() and not (args.force or args.inspect):
+    sent, done = load_sent_log(date)
+    if done and not (args.force or args.inspect):
         print("この日は対応済みです(やり直すときは --force)。")
         return
 
@@ -278,16 +350,26 @@ def main():
     if kosen.headless:
         #画面の無い Chrome はもう使わない(さくら連絡網は画面ありで開き直す)
         kosen.driver.quit()
-    lessons = lesson_columns(rows) if len(rows) > LESSON_NAME_ROW else []
     if args.inspect:
+        try:
+            lessons = lesson_columns(rows) if len(rows) > LESSON_NAME_ROW else []
+        except ValueError as e:
+            print(e)
+            lessons = []
         inspect(rows, lessons)
         return
+    lessons = lesson_columns(rows) if len(rows) > LESSON_NAME_ROW else []
     if not lessons:
         sys.exit("出力ファイルに授業の列がありません。--inspect で構造を確認してください。")
+    print("時限:", ' / '.join(f"{p}限 {n}" for _, p, n in lessons))
     targets, all_absent, none_absent = find_targets(rows, lessons)
     print(f"授業 {len(lessons)} コマ / 全時限欠課 {all_absent} 名(除外) / 欠課なし {none_absent} 名(除外) / 対象 {len(targets)} 名")
-    if not targets:
-        mark_done(date)
+    handled = {RESULT_SENT} if args.force else {RESULT_SENT, RESULT_SKIPPED}
+    remaining = [t for t in targets if sent.get(t[1]) not in handled]
+    if len(remaining) < len(targets):
+        print(f"記録済みの {len(targets) - len(remaining)} 名を飛ばします(残り {len(remaining)} 名)。")
+    if not remaining:
+        append_sent_log(date, '', '', RESULT_DONE)
         print("送信対象がいないので終了します。")
         return
 
@@ -298,30 +380,52 @@ def main():
         sakura = Sakura.share_driver(kosen)
         sakura.login()
     subject = f'{SUBJECT_PREFIX}【{date.month}/{date.day}（{WEEKDAYS[date.weekday()]}）】'
-    skipped = 0
-    for i, (_, number, name, absent) in enumerate(targets, start=1):
-        lessons_text = format_lessons(absent)
-        print(f"[{i}/{len(targets)}] 出席番号 {number}: {lessons_text}")
+    #欠課の内容がまったく同じ学生は1通にまとめる(宛名は「受信者氏名を差し込む」で一人ずつ変わる)
+    groups = {}
+    for _, number, name, absent in remaining:
+        groups.setdefault(format_lessons(absent), []).append((number, name))
+    print(f"{len(remaining)} 名を {len(groups)} 通にまとめました。")
+
+    sent_count = skipped = 0
+    for i, (lessons_text, students) in enumerate(groups.items(), start=1):
+        print(f"[{i}/{len(groups)}] 出席番号 {', '.join(n for n, _ in students)}: {lessons_text}")
         body = BODY.format(date=format_date(date), lessons=lessons_text)
-        sakura.new_message(subject, body)
-        unmatched = sakura.set_recipients([name], AFFILIATION)
-        if unmatched:
-            print("  さくら連絡網で宛先が見つかりませんでした。この学生は手動で対応してください。")
-            skipped += 1
+        while True:
+            sakura.new_message(subject, body)
+            unmatched = set(sakura.set_recipients(to_sakura_names([name for _, name in students]), AFFILIATION))
+            #照合できなかった学生の表示名を辞書に登録できたら、このメッセージを作り直す
+            if not unmatched or not ask_aliases([students[j] for j in sorted(unmatched)]):
+                break
+        for j in sorted(unmatched):
+            print(f"  出席番号 {students[j][0]} は宛先に入れていません。手動で対応してください。")
+        skipped += len(unmatched)
+        matched = [st for j, st in enumerate(students) if j not in unmatched]
+        if not matched:
             continue
+        if unmatched:
+            print(f"  宛先: {len(matched)} 名(出席番号 {', '.join(n for n, _ in matched)})")
         for text in sakura.go_send_detail():
             print("  ", text)
         for text in sakura.set_insert_recipient_name():
             print("  ", text)
-        answer = input("  ブラウザで内容を確認して送信してください。送信したら Enter / 送らない場合は s / 中断は q: ").strip().lower()
+        print("  ブラウザで内容を確認して送信してください(送信の完了を検知して次へ進みます)。"
+              "送らない場合は s / 中断は q: ", end='', flush=True)
+        answer = sakura.wait_for_send()
         if answer == 'q':
             print("中断しました(この日は対応済みにしません)。")
             return
-        if answer == 's':
-            skipped += 1
+        result = RESULT_SENT if answer == 'sent' else RESULT_SKIPPED
+        if result == RESULT_SENT:
+            print("送信を確認しました。")
+        for number, _ in matched:
+            append_sent_log(date, number, lessons_text, result)
+        if result == RESULT_SENT:
+            sent_count += len(matched)
+        else:
+            skipped += len(matched)
 
-    mark_done(date)
-    print(f"完了: {len(targets) - skipped} 名に送信、{skipped} 名は送信せず。{date} を対応済みにしました。")
+    append_sent_log(date, '', '', RESULT_DONE)
+    print(f"完了: {sent_count} 名に送信、{skipped} 名は送信せず。{date} を対応済みにしました。")
 
 
 if __name__ == '__main__':

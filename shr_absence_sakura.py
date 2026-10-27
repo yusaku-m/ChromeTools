@@ -24,12 +24,11 @@ import sys
 import openpyxl
 
 from Chrome.Sakura import Sakura
+from paths import onedrive_dir
+from sakura_names import ask_aliases, to_sakura_names
 
-#職場の OneDrive の場所は PC ごとに違う(開発PCはホーム直下、本番PCは D:\)ので、
-#OneDrive クライアントが設定する OneDriveCommercial を優先する。
-ONEDRIVE_WORK = os.environ.get('OneDriveCommercial') or os.path.join(
-    os.path.expanduser('~'), 'OneDrive - 独立行政法人 国立高等専門学校機構')
-EXCEL_PATH = os.path.join(ONEDRIVE_WORK, 'Work', '講義', '3ME_担任', '2026_3ME', 'SHR.xlsx')
+#職場の OneDrive の場所は PC ごとに違う(開発PCはホーム直下、本番PCは D:\)ので paths で解決する
+EXCEL_PATH = onedrive_dir('Work', '講義', '3ME_担任', '2026_3ME', 'SHR.xlsx')
 SHEET = '点呼簿'
 #点呼簿シートの行位置(2026-10 実ファイルで確認)。199行目が日付(=B2 等)、
 #200〜245行目がその日の不在者「出席番号_苗字　名前」(不在でなければ空文字)。
@@ -147,11 +146,13 @@ def main():
     print(f"下書きを作成: No.{draft}")
 
     sakura.edit_subject(draft, subject)
-    unmatched = sakura.set_recipients([name for _, name in absentees], AFFILIATION)
+    unmatched = sakura.set_recipients(to_sakura_names([name for _, name in absentees]), AFFILIATION)
     print(f"宛先: {len(absentees) - len(unmatched)} 名を追加")
     if unmatched:
-        numbers = ', '.join(absentees[i][0] for i in unmatched)
-        print(f"警告: さくら連絡網で見つからなかった学生 {len(unmatched)} 名(出席番号 {numbers})。手動で追加してください。")
+        print(f"警告: さくら連絡網で見つからなかった学生が {len(unmatched)} 名います。")
+        #表示名を登録しておけば次回からは自動で入る。今回の分は手で追加してもらう
+        ask_aliases([absentees[i] for i in unmatched])
+        print("  上の学生は、今回はブラウザで宛先に手動で追加してください。")
 
     for text in sakura.go_send_detail():
         print("  ", text)
