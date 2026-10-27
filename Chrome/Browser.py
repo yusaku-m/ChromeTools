@@ -15,9 +15,10 @@ class DatabaseBusyError(Exception):
 
 class Browser:
     """ブラウザ操作クラス"""
-    def __init__(self, userdata_path, debugger_address=None):
+    def __init__(self, userdata_path, debugger_address=None, headless=False):
         # 初期設定
         self.userdata_path = userdata_path
+        self.headless = headless and not debugger_address
         if debugger_address:
             #開発用: --remote-debugging-port で起動済みのChromeに接続する。
             #ログインを毎回やり直さずに済む。
@@ -41,6 +42,10 @@ class Browser:
         options.add_argument("disable-infobars")
         options.add_argument('--lang=ja-JP')
         options.add_argument('--disable-gpu')
+        if self.headless:
+            #ヘッドレスでは手動ログイン等ができない。必要になったら呼び出し側で画面ありで起動し直すこと
+            options.add_argument('--headless=new')
+            options.add_argument('--window-size=1920,1080')
 
         # 強制終了後の「クラッシュ復元ダイアログ」でハングするのを防ぐ
         options.add_argument('--no-first-run')
@@ -96,6 +101,7 @@ class Browser:
         obj = cls.__new__(cls)
         obj.userdata_path = other.userdata_path
         obj.driver = other.driver
+        obj.headless = getattr(other, 'headless', False)
         if hasattr(other, 'status'):
             obj.status = other.status
         return obj

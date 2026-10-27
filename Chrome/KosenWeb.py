@@ -12,6 +12,12 @@ BASE_URL = 'https://tktsvr2.t.kagawa-nct.ac.jp/kosen-web'
 DAILY_ATTENDANCE_URL = BASE_URL + '/wku0121/index/31/31-W-6-3-7'
 
 
+class LoginRequired(Exception):
+    """ヘッドレスで起動したがログインしておらず、パスワードの自動入力も無かった。
+    画面ありで起動し直してログインしてもらう必要がある。"""
+    pass
+
+
 class KosenWeb(Browser):
     """KOSEN WEB(教務システム)の操作。
 
@@ -40,6 +46,8 @@ class KosenWeb(Browser):
                 break
         if filled:
             self.driver.find_element(By.CSS_SELECTOR, 'form[action$="/account/login"] input[type=submit]').click()
+        elif getattr(self, 'headless', False):
+            raise LoginRequired("KOSEN WEB にログインしていません")
         else:
             print("パスワードが自動入力されていません。ブラウザで KOSEN WEB にログインしてください。")
         self.wait_for_manual_step(lambda: not self.driver.find_elements(By.ID, 'LoginID'),

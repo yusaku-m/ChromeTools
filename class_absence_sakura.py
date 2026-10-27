@@ -3,6 +3,10 @@
     pixi run absence             # 前回の授業日の分(行事予定から求める)
     pixi run absence 1026        # 日付指定(MMDD、年は今年。YYYY-MM-DD も可)
     pixi run absence --inspect   # 出力ファイルの構造(見出し行と件数)だけ表示して終わる
+    pixi run absence --show      # KOSEN WEB の取得もブラウザ画面を出して行う
+
+KOSEN WEB からの取得はヘッドレスで行う。ログインしていなければ(パスワードの自動入力も無ければ)
+画面ありで起動し直してログインを待つ。さくら連絡網は送信確認を目で見るので常に画面ありで開く。
 
 1. 行事予定(data/*行事予定*.xlsx)から前回の授業日を求める。対応済みの日なら終了
 2. KOSEN WEB「日別出欠の閲覧（期間指定）」でその日の 3年・機械工学科 を出力
@@ -30,7 +34,7 @@ import unicodedata
 
 import openpyxl
 
-from Chrome.KosenWeb import KosenWeb
+from Chrome.KosenWeb import KosenWeb, LoginRequired
 from Chrome.Sakura import Sakura
 
 GRADE = '3年'
@@ -135,7 +139,9 @@ def mark_done(date):
 def read_table(path):
     """CSV/xlsx を文字列の2次元リストで読む。"""
     if path.lower().endswith(('.xlsx', '.xlsm')):
-        ws = openpyxl.load_workbook(path, data_only=True, read_only=True).worksheets[0]
+        #read_only=True だとファイルに書かれた <dimension> の範囲しか読まない。KOSEN WEB の出力は
+        #それが実データより狭く、右側の列が欠けるので通常モードで読む(ファイルは小さい)
+        ws = openpyxl.load_workbook(path, data_only=True).worksheets[0]
         return [['' if v is None else str(v) for v in row] for row in ws.iter_rows(values_only=True)]
     for encoding in ('utf-8-sig', 'cp932'):
         try:
@@ -186,7 +192,7 @@ def find_targets(rows, lessons):
 
 def inspect(rows, lessons):
     """出力ファイルの構造だけを表示する(氏名や個々の学生の値は出さない)。"""
-    print(f"行数: {len(rows)}")
+    print(f"行数: {len(rows)} / 列数: {max((len(r) for r in rows), default=0)}")
     for i in range(min(2, len(rows))):
         print(f"{i + 1}行目: {rows[i]}")
     print("授業の列:", [(chr(ord('A') + c), p, n) for c, p, n in lessons])
@@ -231,6 +237,7 @@ def main():
     parser.add_argument('--force', action='store_true', help='対応済みの日でも実行する')
     parser.add_argument('--inspect', action='store_true', help='出力ファイルの構造だけ表示して終わる')
     parser.add_argument('--list-days', action='store_true', help='行事予定から求めた授業日の一覧を表示して終わる')
+    parser.add_argument('--show', action='store_true', help='KOSEN WEB の取得もヘッドレスにせず画面を出して行う')
     parser.add_argument('--debugger-address', help='起動済みChromeに接続する(例 127.0.0.1:9333)')
     args = parser.parse_args()
 
@@ -254,14 +261,23 @@ def main():
         print("この日は対応済みです(やり直すときは --force)。")
         return
 
-    kosen = KosenWeb(USER_DATA_PATH, debugger_address=args.debugger_address)
+    kosen = KosenWeb(USER_DATA_PATH, debugger_address=args.debugger_address, headless=not args.show)
     download_dir = tempfile.mkdtemp(prefix='kosenweb_')
     try:
-        path = kosen.download_daily_attendance(date, GRADE, DEPARTMENT, download_dir)
+        try:
+            path = kosen.download_daily_attendance(date, GRADE, DEPARTMENT, download_dir)
+        except LoginRequired:
+            print("KOSEN WEB にログインしていないので、ブラウザ画面を出して起動し直します。")
+            kosen.driver.quit()
+            kosen = KosenWeb(USER_DATA_PATH, debugger_address=args.debugger_address)
+            path = kosen.download_daily_attendance(date, GRADE, DEPARTMENT, download_dir)
         rows = read_table(path)
     finally:
         shutil.rmtree(download_dir, ignore_errors=True)
 
+    if kosen.headless:
+        #画面の無い Chrome はもう使わない(さくら連絡網は画面ありで開き直す)
+        kosen.driver.quit()
     lessons = lesson_columns(rows) if len(rows) > LESSON_NAME_ROW else []
     if args.inspect:
         inspect(rows, lessons)
@@ -275,8 +291,12 @@ def main():
         print("送信対象がいないので終了します。")
         return
 
-    sakura = Sakura.share_driver(kosen)
-    sakura.login()
+    if kosen.headless:
+        #送信内容を目で確認するので、さくら連絡網は画面ありの Chrome で開く
+        sakura = Sakura(USER_DATA_PATH)
+    else:
+        sakura = Sakura.share_driver(kosen)
+        sakura.login()
     subject = f'{SUBJECT_PREFIX}【{date.month}/{date.day}（{WEEKDAYS[date.weekday()]}）】'
     skipped = 0
     for i, (_, number, name, absent) in enumerate(targets, start=1):

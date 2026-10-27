@@ -156,7 +156,8 @@ Locating the search-result row must **not** be a bare `By.PARTIAL_LINK_TEXT` on 
 - 行事予定は `data/*行事予定*.xlsx`（最新のもの）。月ブロックが横に並び、2行目の「N月」の列が曜、3行目でその右の「高松」列のさらに右隣が授業週番号（授業日は数字、試験・行事日は「〇」、休日は空欄）。日 d は d+3 行目。曜の列と実際の曜日を照合して、形が変わったら例外にしている。年度はファイル名の「令和N年度」から。
 - KOSEN WEB（`Chrome/KosenWeb.py`）: 「日別出欠の閲覧（期間指定）」は `/kosen-web/wku0121/index/31/31-W-6-3-7`。項目は `#vi-con-nendo` / `#vi-con-datefrom`・`#vi-con-dateto`（`YYYY/MM/DD`、jQuery datepicker）/ `#vi-drp-years`（`3年`）/ `#vi-drp-classex`（`機械工学科`。「機械工学科（旧）」があるので完全一致）/ `#vi-btn-output`（JSON を POST してファイルが返る。`<form>` は無い）。ログインフォームは `#LoginID` / `#Password`。初回はパスワードが保存されていないので手動ログインを待つ。
 - さくら連絡網は新規作成（`Sakura.new_message()`: `OpenDistEdit_New()` → `MsgEditWorker.DefineMessageType(DIST_MESSAGE_TYPE.MESSAGE)`）。本文は Quill エディタ（`MsgEditWorker.Editor.setText()`。「文字装飾OFF」時のみ `#txtaBody`）。宛先は SHR と同じ `set_recipients()`。送信確認画面で `Sakura.set_insert_recipient_name()` が `MsgEditWorker.OpenOptionDialog()` → `#rdoInsertAccountName_ON` → `DefineOptionDialog()` で「受信者氏名を差し込む」を「する」にする。
-- KOSEN WEB とさくら連絡網は同じ Chrome を使う（`Browser.share_driver()`）。`--debugger-address` は `Browser.__init__` に移した（以前は `Sakura` 独自）。
+- KOSEN WEB の取得は既定でヘッドレス（`Browser(headless=True)` → `--headless=new`。`--show` で画面あり）。未ログインでパスワードの自動入力も無いと `KosenWeb.login()` が `LoginRequired` を投げ、画面ありで起動し直して手動ログインを待つ。ヘッドレスで取得した場合、さくら連絡網は画面ありの Chrome を新たに開く（送信内容を目で確認するため）。出力 xlsx は `read_only=True` で読むと右側の列が欠けたので通常モードで読む。
+- KOSEN WEB とさくら連絡網は、画面ありで取得した場合は同じ Chrome を使う（`Browser.share_driver()`）。`--debugger-address` は `Browser.__init__` に移した（以前は `Sakura` 独自）。
 - Garoon の「学生欠席等連絡」との照合は未実装（`docs/backlog_garoon.md` の4と同じ）。
 
 ### File locations
